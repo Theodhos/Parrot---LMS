@@ -13,12 +13,16 @@ test.describe("purchase-gated course access", () => {
     // Per prisma/seed.ts: carol only purchased Modern Web Development.
     await loginAs(page, "carol@parrot.dev");
 
+    // Note: these render as real <a> tags (see enroll-form.tsx / the
+    // "Continue learning" Button render={<Link/>} usage), but the shared
+    // Button component (Base UI) always reports role="button" to
+    // accessibility tools regardless of the underlying tag it renders as.
     await page.goto("/courses/java-programming");
-    await expect(page.getByRole("link", { name: /buy this course/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /continue learning/i })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /buy this course/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /continue learning/i })).not.toBeVisible();
 
     await page.goto("/courses/modern-web-development");
-    await expect(page.getByRole("link", { name: /continue learning/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /continue learning/i })).toBeVisible();
   });
 
   test("cannot open a lesson from a course that hasn't been purchased, even via direct URL", async ({ page }) => {

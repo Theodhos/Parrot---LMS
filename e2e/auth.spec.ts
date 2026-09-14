@@ -13,7 +13,9 @@ test.describe("authentication", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
 
     await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.getByText(/welcome back, alice/i)).toBeVisible();
+    // getByText would also match Next.js's hidden route-announcer div, which
+    // carries the same text for screen readers -- scope to the real heading.
+    await expect(page.getByRole("heading", { name: /welcome back, alice/i })).toBeVisible();
   });
 
   test("rejects an incorrect password with a visible error, no redirect", async ({ page }) => {

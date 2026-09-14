@@ -1,0 +1,33 @@
+import "server-only";
+import { Role } from "@/generated/prisma";
+import { NotFoundError } from "@/lib/errors/app-error";
+import { requireRole, type SessionUser } from "@/lib/permissions";
+import * as userRepo from "@/features/users/repositories/user.repository";
+import type { ListUsersQuery, UpdateProfileInput } from "@/features/users/schemas/user.schema";
+
+export async function getProfile(user: SessionUser) {
+  const record = await userRepo.findUserById(user.id);
+  if (!record) throw new NotFoundError("User");
+  return record;
+}
+
+export async function updateProfile(user: SessionUser, input: UpdateProfileInput) {
+  return userRepo.updateUser(user.id, {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.bio !== undefined ? { bio: input.bio } : {}),
+    ...(input.image !== undefined ? { image: input.image || null } : {}),
+  });
+}
+
+export async function listUsers(admin: SessionUser, query: ListUsersQuery) {
+  requireRole(admin, Role.ADMIN);
+  const { total, users } = await userRepo.listUsers(query);
+  return { items: users, total, page: query.page, pageSize: query.pageSize, pageCount: Math.ceil(total / query.pageSize) };
+}
+
+export async function updateUserRole(admin: SessionUser, userId: string, role: Role) {
+  requireRole(admin, Role.ADMIN);
+  const target = await userRepo.findUserById(userId);
+  if (!target) throw new NotFoundError("User");
+  return userRepo.updateUser(userId, { role });
+}

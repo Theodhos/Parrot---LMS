@@ -49,6 +49,9 @@ next-env.d.ts
 # prisma generated client
 /src/generated/
 
+# local throwaway WordPress dev instance (scripts/setup-local-wordpress.sh)
+/.wordpress-dev/
+
 # editor
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,7 @@
+node_modules
+.next
+src/generated
+coverage
+playwright-report
+test-results
+package-lock.json

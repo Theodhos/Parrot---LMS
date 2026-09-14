@@ -145,7 +145,7 @@ async function main() {
           description: `${lesson.title} — part of ${mod.title}.`,
           content:
             lesson.type === LessonType.ARTICLE || lesson.type === LessonType.DOCUMENT
-              ? `# ${lesson.title}\n\nThis lesson covers **${lesson.title}** in depth with examples and exercises.\n\n- Key concept one\n- Key concept two\n- Key concept three`
+              ? `<h2>${lesson.title}</h2><p>This lesson covers <strong>${lesson.title}</strong> in depth with examples and exercises.</p><ul><li>Key concept one</li><li>Key concept two</li><li>Key concept three</li></ul>`
               : null,
           videoUrl: "videoUrl" in lesson ? lesson.videoUrl : null,
           duration: lesson.duration,
@@ -242,7 +242,7 @@ async function main() {
         data: {
           title,
           slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-          content: `# ${title}\n\nHands-on lesson content for ${title}.`,
+          content: `<h2>${title}</h2><p>Hands-on lesson content for ${title}.</p>`,
           duration: 480 + li * 60,
           order: li,
           type: LessonType.ARTICLE,
@@ -274,7 +274,7 @@ async function main() {
     data: {
       title: "Why Data Science?",
       slug: "why-data-science",
-      content: "# Why Data Science?\n\nComing soon.",
+      content: "<h2>Why Data Science?</h2><p>Coming soon.</p>",
       duration: 300,
       order: 0,
       type: LessonType.ARTICLE,

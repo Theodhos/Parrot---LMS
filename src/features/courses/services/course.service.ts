@@ -36,6 +36,7 @@ function toListItemDTO(
     enrollmentCount: course._count.enrollments,
     averageRating,
     createdAt: course.createdAt,
+    woocommerceProductId: course.woocommerceProductId,
   };
 }
 

@@ -36,7 +36,13 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
             // eslint-disable-next-line @next/next/no-img-element -- thumbnails are arbitrary external URLs, not project-controlled assets
             <img src={course.thumbnail} alt="" className="size-full object-cover" />
           ) : (
-            <div className={cn("flex size-full items-center justify-center bg-gradient-to-br", accent.from, accent.to)}>
+            <div
+              className={cn(
+                "flex size-full items-center justify-center bg-gradient-to-br",
+                accent.from,
+                accent.to,
+              )}
+            >
               <BookOpen className={cn("size-10", accent.text)} />
             </div>
           )}
@@ -44,7 +50,7 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
             <Badge
               className={cn(
                 "absolute top-2 right-2 border-transparent shadow-sm",
-                isCompleted ? "bg-emerald-500 text-white" : "bg-white/95 text-foreground",
+                isCompleted ? "bg-emerald-500 text-white" : "text-foreground bg-white/95",
               )}
             >
               {isCompleted && <CheckCircle2 className="size-3" />}
@@ -56,18 +62,21 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
       <CardContent className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {course.categoryName && (
-            <Badge variant="outline" className="border-transparent bg-muted font-medium text-foreground">
+            <Badge
+              variant="outline"
+              className="bg-muted text-foreground border-transparent font-medium"
+            >
               {course.categoryName}
             </Badge>
           )}
           <CourseLevelBadge level={course.level} />
         </div>
-        <Link href={href} className="line-clamp-2 font-medium leading-snug hover:underline">
+        <Link href={href} className="line-clamp-2 leading-snug font-medium hover:underline">
           {course.title}
         </Link>
-        <p className="text-xs text-muted-foreground">by {course.instructorName}</p>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{course.description}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">by {course.instructorName}</p>
+        <p className="text-muted-foreground line-clamp-2 text-sm">{course.description}</p>
+        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span className="flex items-center gap-1">
             <Layers className="size-3.5" />
             {course.moduleCount} modules

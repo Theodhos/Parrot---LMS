@@ -10,6 +10,8 @@ export interface ColorAccent {
   /** Saturated background for gradients and fallback thumbnails. */
   from: string;
   to: string;
+  /** Plain solid background (no dark-mode variant), e.g. for progress bars -- prepend "!" to force it over a variant default. */
+  solid: string;
 }
 
 export const AMBER: ColorAccent = {
@@ -18,6 +20,7 @@ export const AMBER: ColorAccent = {
   ring: "ring-amber-200 dark:ring-amber-500/30",
   from: "from-amber-200",
   to: "to-amber-100",
+  solid: "bg-amber-400",
 };
 
 export const SKY: ColorAccent = {
@@ -26,6 +29,7 @@ export const SKY: ColorAccent = {
   ring: "ring-sky-200 dark:ring-sky-500/30",
   from: "from-sky-200",
   to: "to-sky-100",
+  solid: "bg-sky-400",
 };
 
 export const EMERALD: ColorAccent = {
@@ -34,6 +38,7 @@ export const EMERALD: ColorAccent = {
   ring: "ring-emerald-200 dark:ring-emerald-500/30",
   from: "from-emerald-200",
   to: "to-emerald-100",
+  solid: "bg-emerald-400",
 };
 
 export const VIOLET: ColorAccent = {
@@ -42,6 +47,7 @@ export const VIOLET: ColorAccent = {
   ring: "ring-violet-200 dark:ring-violet-500/30",
   from: "from-violet-200",
   to: "to-violet-100",
+  solid: "bg-violet-400",
 };
 
 export const ROSE: ColorAccent = {
@@ -50,10 +56,17 @@ export const ROSE: ColorAccent = {
   ring: "ring-rose-200 dark:ring-rose-500/30",
   from: "from-rose-200",
   to: "to-rose-100",
+  solid: "bg-rose-400",
 };
 
 /** A small rotation of warm, kid-friendly colors used across course cards, modules, and lesson chips. */
-export const ACCENT_PALETTE: readonly [ColorAccent, ...ColorAccent[]] = [AMBER, SKY, EMERALD, VIOLET, ROSE];
+export const ACCENT_PALETTE: readonly [ColorAccent, ...ColorAccent[]] = [
+  AMBER,
+  SKY,
+  EMERALD,
+  VIOLET,
+  ROSE,
+];
 
 function hashString(value: string): number {
   let hash = 0;

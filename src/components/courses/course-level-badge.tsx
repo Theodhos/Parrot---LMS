@@ -12,7 +12,10 @@ const LEVEL_LABELS: Record<CourseLevel, string> = {
 export function CourseLevelBadge({ level, className }: { level: CourseLevel; className?: string }) {
   const accent = LEVEL_THEME[level];
   return (
-    <Badge variant="outline" className={cn("border-transparent font-medium", accent.bg, accent.text, className)}>
+    <Badge
+      variant="outline"
+      className={cn("border-transparent font-medium", accent.bg, accent.text, className)}
+    >
       {LEVEL_LABELS[level]}
     </Badge>
   );

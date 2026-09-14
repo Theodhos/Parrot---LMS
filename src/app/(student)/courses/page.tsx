@@ -50,8 +50,10 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           <Sparkles className="size-3.5" />
           Course library
         </span>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Browse all courses</h1>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+          Browse all courses
+        </h1>
+        <p className="text-muted-foreground mt-1 max-w-xl text-sm">
           {total} published course{total === 1 ? "" : "s"} — every course we offer, no exceptions.
         </p>
       </div>
@@ -60,12 +62,16 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 text-center">
-          <BookOpen className="size-8 text-muted-foreground" />
+          <BookOpen className="text-muted-foreground size-8" />
           <p className="font-medium">No courses match your filters</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
+          <p className="text-muted-foreground max-w-sm text-sm">
             Try a different search term or clear the filters to see everything on offer.
           </p>
-          <Button variant="outline" className="mt-2 !rounded-full" render={<Link href="/courses">Clear filters</Link>} />
+          <Button
+            variant="outline"
+            className="mt-2 !rounded-full"
+            render={<Link href="/courses">Clear filters</Link>}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

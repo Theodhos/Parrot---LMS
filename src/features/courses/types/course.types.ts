@@ -17,6 +17,8 @@ export interface CourseListItemDTO {
   enrollmentCount: number;
   averageRating: number | null;
   createdAt: Date;
+  /** The WooCommerce product that grants access -- null means this course has no purchase path configured yet. */
+  woocommerceProductId: number | null;
 }
 
 export interface LessonOutlineDTO {

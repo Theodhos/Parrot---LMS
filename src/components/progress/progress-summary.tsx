@@ -28,7 +28,7 @@ export function ProgressSummary({
         <span className="text-muted-foreground">{percent}%</span>
       </div>
       <Progress value={percent} indicatorClassName={indicatorClassName} />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         {completedLessons} / {totalLessons} lessons completed
       </p>
     </div>

@@ -13,7 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { CourseLevelBadge } from "@/components/courses/course-level-badge";
 import { CourseOutline } from "@/components/courses/course-outline";
@@ -24,13 +23,15 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { cn, formatDate, formatDuration } from "@/lib/utils";
 import { getPublishedCourseBySlug } from "@/features/courses/services/course.service";
 import { getMyEnrollment } from "@/features/enrollments/services/enrollment.service";
-import { getCourseProgress, getLessonProgress } from "@/features/progress/services/progress.service";
+import {
+  getCourseProgress,
+  getLessonProgress,
+} from "@/features/progress/services/progress.service";
 import { NotFoundError } from "@/lib/errors/app-error";
 import type { SessionUser } from "@/lib/permissions";
 
 interface CourseDetailPageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 /** Finds the first not-yet-completed lesson (in course order), or the last lesson if everything is done. */
@@ -42,10 +43,8 @@ async function findResumeLessonId(user: SessionUser, lessonIds: string[]): Promi
   return lessonIds[resolvedIndex] ?? null;
 }
 
-export default async function CourseDetailPage({ params, searchParams }: CourseDetailPageProps) {
+export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
   const { slug } = await params;
-  const sp = await searchParams;
-  const enrollError = typeof sp.enrollError === "string" ? sp.enrollError : null;
 
   const user = await requireCurrentUser();
 
@@ -59,7 +58,10 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
 
   const enrollment = await getMyEnrollment(user, course.id);
   const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.id));
-  const firstLessonId = lessonIds[0] ?? null;
+  const buyUrl =
+    course.woocommerceProductId && process.env.WORDPRESS_URL
+      ? `${process.env.WORDPRESS_URL.replace(/\/+$/, "")}/?add-to-cart=${course.woocommerceProductId}`
+      : null;
 
   const [progress, resumeLessonId] = enrollment
     ? await Promise.all([getCourseProgress(user, course.id), findResumeLessonId(user, lessonIds)])
@@ -87,7 +89,9 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
             variant="outline"
             className={cn(
               "border-transparent font-medium",
-              isCompleted ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+              isCompleted
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
             )}
           >
             {isCompleted ? "Completed" : "In progress"}
@@ -95,20 +99,20 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
         )}
       </div>
 
-      {enrollError && (
-        <Alert variant="destructive">
-          <AlertDescription>{enrollError}</AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <div className="relative aspect-video w-full overflow-hidden rounded-2xl ring-1 ring-border">
+          <div className="ring-border relative aspect-video w-full overflow-hidden rounded-2xl ring-1">
             {course.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element -- arbitrary external thumbnail URL
               <img src={course.thumbnail} alt="" className="size-full object-cover" />
             ) : (
-              <div className={cn("flex size-full items-center justify-center bg-gradient-to-br", accent.from, accent.to)}>
+              <div
+                className={cn(
+                  "flex size-full items-center justify-center bg-gradient-to-br",
+                  accent.from,
+                  accent.to,
+                )}
+              >
                 <BookOpen className={cn("size-12", accent.text)} />
               </div>
             )}
@@ -117,24 +121,34 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
               {course.categoryName && (
-                <Badge variant="outline" className="border-transparent bg-muted font-medium text-foreground">
+                <Badge
+                  variant="outline"
+                  className="bg-muted text-foreground border-transparent font-medium"
+                >
                   {course.categoryName}
                 </Badge>
               )}
               <CourseLevelBadge level={course.level} />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{course.title}</h1>
-            <p className="text-sm whitespace-pre-line text-muted-foreground">{course.description}</p>
+            <p className="text-muted-foreground text-sm whitespace-pre-line">
+              {course.description}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-            <Avatar size="lg" className={cn("ring-2 ring-offset-2 ring-offset-background", accent.ring)}>
-              {course.instructorImage && <AvatarImage src={course.instructorImage} alt={course.instructorName} />}
+          <div className="bg-card flex items-center gap-3 rounded-2xl border p-4">
+            <Avatar
+              size="lg"
+              className={cn("ring-offset-background ring-2 ring-offset-2", accent.ring)}
+            >
+              {course.instructorImage && (
+                <AvatarImage src={course.instructorImage} alt={course.instructorName} />
+              )}
               <AvatarFallback>{course.instructorName.slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div>
               <p className="text-sm font-medium">{course.instructorName}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 {course.instructorBio ?? "Course instructor"}
               </p>
             </div>
@@ -152,7 +166,9 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
         <div className="flex flex-col gap-4">
           <Card>
             <CardContent className="flex flex-col gap-4">
-              <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">At a glance</p>
+              <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                At a glance
+              </p>
               <div className="flex flex-col gap-3 text-sm">
                 <div className="flex items-center gap-2.5">
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
@@ -198,9 +214,11 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
                     totalLessons={progress.totalLessons}
                     indicatorClassName="!bg-gradient-to-r !from-amber-400 !to-orange-500"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Enrolled {formatDate(enrollment.enrolledAt)}
-                    {enrollment.completedAt ? ` · Completed ${formatDate(enrollment.completedAt)}` : ""}
+                    {enrollment.completedAt
+                      ? ` · Completed ${formatDate(enrollment.completedAt)}`
+                      : ""}
                   </p>
                   <Button
                     className="w-full !rounded-full !bg-orange-500 !text-white hover:!bg-orange-600"
@@ -212,7 +230,7 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
                   />
                 </div>
               ) : (
-                <EnrollForm courseId={course.id} slug={course.slug} firstLessonId={firstLessonId} />
+                <EnrollForm buyUrl={buyUrl} />
               )}
             </CardContent>
           </Card>

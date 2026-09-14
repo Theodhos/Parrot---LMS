@@ -100,6 +100,7 @@ async function main() {
       status: CourseStatus.PUBLISHED,
       instructorId: instructor.id,
       categoryId: catProgramming.id,
+      woocommerceProductId: 11,
     },
   });
 
@@ -229,6 +230,7 @@ async function main() {
       status: CourseStatus.PUBLISHED,
       instructorId: instructor2.id,
       categoryId: catWeb.id,
+      woocommerceProductId: 12,
     },
   });
 

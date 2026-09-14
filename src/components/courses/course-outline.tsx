@@ -1,5 +1,10 @@
 import { FileText, HelpCircle, PlayCircle, FileBox } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { LESSON_TYPE_THEME, pickAccent } from "@/components/courses/course-theme";
 import { cn, formatDuration } from "@/lib/utils";
@@ -27,7 +32,10 @@ export function CourseOutline({ modules }: CourseOutlineProps) {
           <AccordionItem
             key={module.id}
             value={module.id}
-            className={cn("mb-3 overflow-hidden rounded-2xl border bg-card px-1 ring-1 last:mb-0", accent.ring)}
+            className={cn(
+              "bg-card mb-3 overflow-hidden rounded-2xl border px-1 ring-1 last:mb-0",
+              accent.ring,
+            )}
           >
             <AccordionTrigger className="px-3 py-3 hover:no-underline">
               <div className="flex flex-1 items-center justify-between gap-3">
@@ -44,13 +52,16 @@ export function CourseOutline({ modules }: CourseOutlineProps) {
                   <div className="flex flex-col gap-0.5 text-left">
                     <span>{module.title}</span>
                     {module.description && (
-                      <span className="line-clamp-1 text-xs font-normal text-muted-foreground">
+                      <span className="text-muted-foreground line-clamp-1 text-xs font-normal">
                         {module.description}
                       </span>
                     )}
                   </div>
                 </div>
-                <Badge variant="outline" className={cn("shrink-0 border-transparent font-medium", accent.bg, accent.text)}>
+                <Badge
+                  variant="outline"
+                  className={cn("shrink-0 border-transparent font-medium", accent.bg, accent.text)}
+                >
                   {module.lessons.length} lesson{module.lessons.length === 1 ? "" : "s"}
                 </Badge>
               </div>
@@ -63,9 +74,9 @@ export function CourseOutline({ modules }: CourseOutlineProps) {
                   return (
                     <li
                       key={lesson.id}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
+                      className="bg-muted/50 text-muted-foreground flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm"
                     >
-                      <span className="flex items-center gap-2.5 text-foreground">
+                      <span className="text-foreground flex items-center gap-2.5">
                         <span
                           className={cn(
                             "flex size-7 shrink-0 items-center justify-center rounded-full",
@@ -77,10 +88,12 @@ export function CourseOutline({ modules }: CourseOutlineProps) {
                         </span>
                         {lesson.title}
                         {lesson.hasQuiz && lesson.type !== LessonType.QUIZ && (
-                          <HelpCircle className="size-3.5 text-muted-foreground" />
+                          <HelpCircle className="text-muted-foreground size-3.5" />
                         )}
                       </span>
-                      {lesson.duration > 0 && <span className="shrink-0">{formatDuration(lesson.duration)}</span>}
+                      {lesson.duration > 0 && (
+                        <span className="shrink-0">{formatDuration(lesson.duration)}</span>
+                      )}
                     </li>
                   );
                 })}

@@ -32,7 +32,7 @@ export function CourseFilters({ categories, defaultValues }: CourseFiltersProps)
       <div className="flex min-w-48 flex-1 flex-col gap-1.5">
         <Label htmlFor="search">Search</Label>
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
           <Input
             id="search"
             name="search"
@@ -45,7 +45,12 @@ export function CourseFilters({ categories, defaultValues }: CourseFiltersProps)
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="category">Category</Label>
-        <select id="category" name="category" defaultValue={defaultValues.category ?? ""} className={selectClassName}>
+        <select
+          id="category"
+          name="category"
+          defaultValue={defaultValues.category ?? ""}
+          className={selectClassName}
+        >
           <option value="">All categories</option>
           {categories.map((category) => (
             <option key={category.id} value={category.slug}>
@@ -57,7 +62,12 @@ export function CourseFilters({ categories, defaultValues }: CourseFiltersProps)
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="level">Level</Label>
-        <select id="level" name="level" defaultValue={defaultValues.level ?? ""} className={selectClassName}>
+        <select
+          id="level"
+          name="level"
+          defaultValue={defaultValues.level ?? ""}
+          className={selectClassName}
+        >
           <option value="">All levels</option>
           {LEVEL_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -68,11 +78,19 @@ export function CourseFilters({ categories, defaultValues }: CourseFiltersProps)
       </div>
 
       <div className="flex items-center gap-2">
-        <Button type="submit" className="!rounded-full !bg-orange-500 !text-white hover:!bg-orange-600">
+        <Button
+          type="submit"
+          className="!rounded-full !bg-orange-500 !text-white hover:!bg-orange-600"
+        >
           Apply filters
         </Button>
         {hasFilters && (
-          <Button variant="ghost" type="button" className="!rounded-full" render={<Link href="/courses">Clear</Link>} />
+          <Button
+            variant="ghost"
+            type="button"
+            className="!rounded-full"
+            render={<Link href="/courses">Clear</Link>}
+          />
         )}
       </div>
     </Form>

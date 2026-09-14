@@ -17,10 +17,14 @@ export function StatCard({ label, value, icon, hint, className, iconClassName }:
   return (
     <Card className={cn("gap-2", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+        <CardTitle className="text-muted-foreground text-sm font-medium">{label}</CardTitle>
         {icon && (
           <div
-            className={iconClassName ? cn("flex size-7 items-center justify-center rounded-full", iconClassName) : "text-muted-foreground"}
+            className={
+              iconClassName
+                ? cn("flex size-7 items-center justify-center rounded-full", iconClassName)
+                : "text-muted-foreground"
+            }
           >
             {icon}
           </div>
@@ -28,7 +32,7 @@ export function StatCard({ label, value, icon, hint, className, iconClassName }:
       </CardHeader>
       <CardContent>
         <div className="font-heading text-2xl font-semibold tracking-tight">{value}</div>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+        {hint && <p className="text-muted-foreground mt-1 text-xs">{hint}</p>}
       </CardContent>
     </Card>
   );

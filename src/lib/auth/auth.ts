@@ -32,7 +32,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         try {
           const user = await verifyCredentials(parsed.data.email, parsed.data.password);
-          return { id: user.id, name: user.name, email: user.email, image: user.image, role: user.role };
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+            role: user.role,
+            wordpressUserId: user.wordpressUserId,
+          };
         } catch {
           return null;
         }
@@ -45,6 +52,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user?.id) {
         token.id = user.id;
         token.role = user.role;
+        token.wordpressUserId = user.wordpressUserId;
       }
       return token;
     },
@@ -52,6 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.wordpressUserId = token.wordpressUserId;
       }
       return session;
     },

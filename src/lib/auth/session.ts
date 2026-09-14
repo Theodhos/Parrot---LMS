@@ -11,6 +11,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     role: session.user.role,
     email: session.user.email ?? "",
     name: session.user.name ?? "",
+    wordpressUserId: session.user.wordpressUserId ?? null,
   };
 }
 

@@ -2,18 +2,28 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import type { SessionUser } from "@/lib/permissions";
+import { requireCourseAccess } from "@/features/access/services/access.service";
 import * as progressRepo from "@/features/progress/repositories/progress.repository";
 import type { UpdateLessonPositionInput } from "@/features/progress/schemas/progress.schema";
 
 /**
  * Steps 1-3 of the spec's progress-completion flow: authenticated user is
- * validated by the caller (requireCurrentUser); here we validate enrollment
- * and that the lesson actually belongs to the given course. Never trust the
- * client-supplied courseId/lessonId pairing beyond this check.
+ * validated by the caller (requireCurrentUser); here we re-verify purchase
+ * access (never trust that an Enrollment row alone still means "allowed" --
+ * a refund must revoke access even if Enrollment/Progress history remains),
+ * enrollment, and that the lesson actually belongs to the given course.
+ * Never trust the client-supplied courseId/lessonId pairing beyond this.
  */
-async function requireEnrollmentAndLesson(userId: string, courseId: string, lessonId: string) {
+async function requireEnrollmentAndLesson(user: SessionUser, courseId: string, lessonId: string) {
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { id: true, instructorId: true },
+  });
+  if (!course) throw new NotFoundError("Course");
+  await requireCourseAccess(user, course);
+
   const [enrollment, lesson] = await Promise.all([
-    prisma.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } } }),
+    prisma.enrollment.findUnique({ where: { userId_courseId: { userId: user.id, courseId } } }),
     prisma.lesson.findUnique({
       where: { id: lessonId },
       select: { id: true, courseId: true, duration: true, published: true },
@@ -35,7 +45,7 @@ async function requireEnrollmentAndLesson(userId: string, courseId: string, less
 
 /** Marks a lesson complete and atomically recalculates course-level progress server-side. */
 export async function markLessonComplete(user: SessionUser, courseId: string, lessonId: string) {
-  const { lesson } = await requireEnrollmentAndLesson(user.id, courseId, lessonId);
+  const { lesson } = await requireEnrollmentAndLesson(user, courseId, lessonId);
 
   const result = await progressRepo.completeLessonProgress({
     userId: user.id,
@@ -62,7 +72,7 @@ export async function updateLessonPosition(
   lessonId: string,
   input: UpdateLessonPositionInput,
 ) {
-  await requireEnrollmentAndLesson(user.id, courseId, lessonId);
+  await requireEnrollmentAndLesson(user, courseId, lessonId);
   await progressRepo.recordLessonStarted(user.id, courseId, lessonId);
 
   const progress = await progressRepo.updateLessonPosition({
@@ -77,6 +87,10 @@ export async function updateLessonPosition(
 }
 
 export async function getCourseProgress(user: SessionUser, courseId: string) {
+  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true, instructorId: true } });
+  if (!course) throw new NotFoundError("Course");
+  await requireCourseAccess(user, course);
+
   const enrollment = await prisma.enrollment.findUnique({ where: { userId_courseId: { userId: user.id, courseId } } });
   if (!enrollment) throw new ForbiddenError("You are not enrolled in this course");
   return progressRepo.getCourseProgressSummary(user.id, courseId);

@@ -1,24 +1,29 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { ActivityType, CourseStatus, NotificationType } from "@/generated/prisma";
-import { ConflictError, NotFoundError } from "@/lib/errors/app-error";
+import { NotFoundError } from "@/lib/errors/app-error";
 import { requireCourseManager, type SessionUser } from "@/lib/permissions";
 import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.repository";
 
-export async function enrollInCourse(user: SessionUser, courseId: string) {
-  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true, title: true, status: true } });
-  if (!course || course.status !== CourseStatus.PUBLISHED) {
-    throw new NotFoundError("Course");
-  }
+/**
+ * Idempotent, access-check-free enrollment creation. This is the primitive
+ * both the webhook handler (on a verified purchase) and enrollInCourse
+ * (below) build on -- it never decides on its own whether the caller is
+ * allowed to enroll, so it must only ever be called after that's already
+ * been established.
+ */
+export async function ensureEnrollment(userId: string, courseId: string) {
+  const existing = await enrollmentRepo.findEnrollment(userId, courseId);
+  if (existing) return existing;
 
-  const existing = await enrollmentRepo.findEnrollment(user.id, courseId);
-  if (existing) throw new ConflictError("You are already enrolled in this course");
+  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { title: true } });
+  if (!course) throw new NotFoundError("Course");
 
   const [enrollment] = await prisma.$transaction([
-    prisma.enrollment.create({ data: { userId: user.id, courseId } }),
+    prisma.enrollment.create({ data: { userId, courseId } }),
     prisma.learningActivity.create({
       data: {
-        user: { connect: { id: user.id } },
+        user: { connect: { id: userId } },
         course: { connect: { id: courseId } },
         type: ActivityType.COURSE_ENROLLED,
         minutesSpent: 0,
@@ -26,15 +31,37 @@ export async function enrollInCourse(user: SessionUser, courseId: string) {
     }),
     prisma.notification.create({
       data: {
-        user: { connect: { id: user.id } },
-        title: "Enrolled successfully",
-        message: `You're now enrolled in "${course.title}". Happy learning!`,
+        user: { connect: { id: userId } },
+        title: "Course unlocked",
+        message: `"${course.title}" is ready -- happy learning!`,
         type: NotificationType.ENROLLMENT,
       },
     }),
   ]);
 
   return enrollment;
+}
+
+/**
+ * Explicit "start learning" entry point for an already-purchased course.
+ * Requires active WooCommerce-verified access -- there is no free
+ * self-enroll path in this application; see features/access/services.
+ */
+export async function enrollInCourse(user: SessionUser, courseId: string) {
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { id: true, instructorId: true, status: true },
+  });
+  if (!course || course.status !== CourseStatus.PUBLISHED) {
+    throw new NotFoundError("Course");
+  }
+
+  // Imported lazily to avoid a module-init cycle with access.service.ts,
+  // which itself calls ensureEnrollment() from this file.
+  const { requireCourseAccess } = await import("@/features/access/services/access.service");
+  await requireCourseAccess(user, course);
+
+  return ensureEnrollment(user.id, courseId);
 }
 
 export function listMyEnrollments(user: SessionUser) {

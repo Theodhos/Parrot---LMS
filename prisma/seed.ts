@@ -9,13 +9,20 @@ import {
   ActivityType,
   NotificationType,
 } from "../src/generated/prisma";
-import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-async function hash(pw: string) {
-  return bcrypt.hash(pw, 10);
-}
+// Matches the WordPress users created for the local course-platform-bridge
+// test site (see the WordPress setup notes in the README) -- identity and
+// passwords live there now, never here.
+const WP_USER_IDS = {
+  admin: 2,
+  instructor: 3,
+  priya: 4,
+  alice: 5,
+  bob: 6,
+  carol: 7,
+} as const;
 
 async function main() {
   console.log("Seeding database...");
@@ -42,14 +49,14 @@ async function main() {
 
   const [, instructor, instructor2, alice, bob, carol] = await Promise.all([
     prisma.user.create({
-      data: { name: "Ada Admin", email: "admin@parrot.dev", role: Role.ADMIN, passwordHash: await hash("password123") },
+      data: { name: "Ada Admin", email: "admin@parrot.dev", role: Role.ADMIN, wordpressUserId: WP_USER_IDS.admin },
     }),
     prisma.user.create({
       data: {
         name: "Ian Instructor",
         email: "instructor@parrot.dev",
         role: Role.INSTRUCTOR,
-        passwordHash: await hash("password123"),
+        wordpressUserId: WP_USER_IDS.instructor,
         bio: "Backend engineer teaching Java and system design for 10+ years.",
       },
     }),
@@ -58,18 +65,18 @@ async function main() {
         name: "Priya Patel",
         email: "priya@parrot.dev",
         role: Role.INSTRUCTOR,
-        passwordHash: await hash("password123"),
+        wordpressUserId: WP_USER_IDS.priya,
         bio: "Frontend architect and design systems lead.",
       },
     }),
     prisma.user.create({
-      data: { name: "Alice Student", email: "alice@parrot.dev", role: Role.STUDENT, passwordHash: await hash("password123") },
+      data: { name: "Alice Student", email: "alice@parrot.dev", role: Role.STUDENT, wordpressUserId: WP_USER_IDS.alice },
     }),
     prisma.user.create({
-      data: { name: "Bob Student", email: "bob@parrot.dev", role: Role.STUDENT, passwordHash: await hash("password123") },
+      data: { name: "Bob Student", email: "bob@parrot.dev", role: Role.STUDENT, wordpressUserId: WP_USER_IDS.bob },
     }),
     prisma.user.create({
-      data: { name: "Carol Student", email: "carol@parrot.dev", role: Role.STUDENT, passwordHash: await hash("password123") },
+      data: { name: "Carol Student", email: "carol@parrot.dev", role: Role.STUDENT, wordpressUserId: WP_USER_IDS.carol },
     }),
   ]);
 
@@ -282,6 +289,22 @@ async function main() {
       moduleId: dsModule.id,
       courseId: dataCourse.id,
     },
+  });
+
+  // ---------------------------------------------------------------------
+  // WooCommerce purchase-access cache -- mirrors the orders created against
+  // the local course-platform-bridge WordPress test site (products 11/12,
+  // orders 13/15/16/17; see the WordPress setup notes). Seeding this
+  // directly keeps demo data self-consistent even if you reset MongoDB
+  // without touching WordPress.
+  // ---------------------------------------------------------------------
+  await prisma.courseAccess.createMany({
+    data: [
+      { wordpressUserId: WP_USER_IDS.alice, courseId: java.id, courseSlug: java.slug, woocommerceProductId: 11, woocommerceOrderId: 13 },
+      { wordpressUserId: WP_USER_IDS.alice, courseId: web.id, courseSlug: web.slug, woocommerceProductId: 12, woocommerceOrderId: 15 },
+      { wordpressUserId: WP_USER_IDS.bob, courseId: java.id, courseSlug: java.slug, woocommerceProductId: 11, woocommerceOrderId: 16 },
+      { wordpressUserId: WP_USER_IDS.carol, courseId: web.id, courseSlug: web.slug, woocommerceProductId: 12, woocommerceOrderId: 17 },
+    ],
   });
 
   // ---------------------------------------------------------------------

@@ -8,18 +8,26 @@ export interface StatCardProps {
   icon?: ReactNode;
   hint?: string;
   className?: string;
+  /** Optional colored circle behind the icon, e.g. "bg-amber-100 text-amber-700". Defaults to a plain muted icon. */
+  iconClassName?: string;
 }
 
 /** A small KPI tile: label, big value, optional icon and hint line. */
-export function StatCard({ label, value, icon, hint, className }: StatCardProps) {
+export function StatCard({ label, value, icon, hint, className, iconClassName }: StatCardProps) {
   return (
     <Card className={cn("gap-2", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
         <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        {icon && <div className="text-muted-foreground">{icon}</div>}
+        {icon && (
+          <div
+            className={iconClassName ? cn("flex size-7 items-center justify-center rounded-full", iconClassName) : "text-muted-foreground"}
+          >
+            {icon}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-semibold tracking-tight">{value}</div>
+        <div className="font-heading text-2xl font-semibold tracking-tight">{value}</div>
         {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>

@@ -2,14 +2,18 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { ForbiddenError, NotFoundError } from "@/lib/errors/app-error";
 import { canManageCourse, type SessionUser } from "@/lib/permissions";
+import { requireCourseAccess } from "@/features/access/services/access.service";
 import * as progressRepo from "@/features/progress/repositories/progress.repository";
 import type { LearnLessonViewDTO } from "@/features/lessons/types/lesson.types";
 
 /**
  * Builds the entire "learn" screen in one pass: sidebar (modules/lessons with
  * completion state), the current lesson's content, its quiz (if any),
- * prev/next navigation, and the course progress summary. A student must be
- * enrolled; a course manager may preview without enrolling.
+ * prev/next navigation, and the course progress summary. Requires verified
+ * WooCommerce purchase access (or enrollment as a fallback signal -- access
+ * can theoretically be granted without an Enrollment row existing yet, e.g.
+ * immediately after a webhook before the sync-on-login step runs); a course
+ * manager may preview without either.
  */
 export async function getLearnLessonView(
   user: SessionUser,
@@ -29,6 +33,7 @@ export async function getLearnLessonView(
 
   const isManager = canManageCourse(user, course);
   if (!isManager) {
+    await requireCourseAccess(user, course);
     const enrollment = await prisma.enrollment.findUnique({
       where: { userId_courseId: { userId: user.id, courseId } },
     });

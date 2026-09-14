@@ -1,42 +1,65 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { ConflictError, UnauthorizedError } from "@/lib/errors/app-error";
+import { UnauthorizedError } from "@/lib/errors/app-error";
 import { Role } from "@/generated/prisma";
 import { registerSchema, type RegisterInput } from "@/features/auth/schemas/auth.schema";
-import { hashPassword, verifyPassword } from "./password.service";
+import { wpLogin, wpRegister, type WordPressProfile } from "./wordpress-bridge.service";
+import { syncEnrollmentsFromAccess } from "@/features/access/services/access.service";
 
-export async function registerUser(input: RegisterInput) {
-  const data = registerSchema.parse(input);
-
-  const existing = await prisma.user.findUnique({ where: { email: data.email } });
-  if (existing) {
-    throw new ConflictError("An account with this email already exists");
-  }
-
-  const passwordHash = await hashPassword(data.password);
-
-  const user = await prisma.user.create({
-    data: {
-      name: data.name,
-      email: data.email,
-      passwordHash,
+/**
+ * Upserts the local "shadow" profile for a WordPress identity. This local
+ * User record is what Enrollment/Progress/Notification/etc. relations key
+ * off internally -- but it never holds a password, and role defaults to
+ * STUDENT for a first-time sign-in (an admin promotes INSTRUCTOR/ADMIN
+ * afterward from the admin panel; that assignment is a Parrot LMS concept,
+ * independent of WordPress's own roles).
+ */
+async function syncLocalUser(profile: WordPressProfile) {
+  const user = await prisma.user.upsert({
+    where: { wordpressUserId: profile.wordpressUserId },
+    create: {
+      wordpressUserId: profile.wordpressUserId,
+      email: profile.email.toLowerCase(),
+      name: profile.name,
       role: Role.STUDENT,
+    },
+    update: {
+      email: profile.email.toLowerCase(),
+      name: profile.name,
     },
   });
 
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+  await syncEnrollmentsFromAccess(user.id, profile.wordpressUserId);
+
+  return user;
 }
 
+/** Registers a brand-new account in WordPress, then mirrors it locally. */
+export async function registerUser(input: RegisterInput) {
+  const data = registerSchema.parse(input);
+  const profile = await wpRegister(data.name, data.email, data.password);
+  const user = await syncLocalUser(profile);
+  return { id: user.id, name: user.name, email: user.email, role: user.role, wordpressUserId: user.wordpressUserId };
+}
+
+/**
+ * Verifies credentials against WordPress -- the password itself never
+ * touches this process's memory beyond this call, is never logged, and is
+ * never persisted anywhere.
+ */
 export async function verifyCredentials(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.passwordHash) {
+  const profile = await wpLogin(email, password);
+  if (!profile) {
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) {
-    throw new UnauthorizedError("Invalid email or password");
-  }
-
-  return { id: user.id, name: user.name, email: user.email, role: user.role, image: user.image };
+  const user = await syncLocalUser(profile);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    image: user.image,
+    wordpressUserId: user.wordpressUserId,
+  };
 }

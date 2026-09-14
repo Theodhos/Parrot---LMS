@@ -6,6 +6,8 @@ export interface SessionUser {
   role: Role;
   email: string;
   name: string;
+  /** Identity lives in WordPress; this links the local profile to it. */
+  wordpressUserId: number | null;
 }
 
 /** Throws 401 if there is no authenticated user. Use at the top of every server action / route handler. */

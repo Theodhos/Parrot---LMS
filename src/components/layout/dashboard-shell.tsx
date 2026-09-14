@@ -7,16 +7,24 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "@/components/navigation/sidebar-nav";
 import { UserMenu, type UserMenuProps } from "@/components/layout/user-menu";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
-import type { NavItem } from "@/components/navigation/nav-items";
+import { ADMIN_NAV_ITEMS, STUDENT_NAV_ITEMS } from "@/components/navigation/nav-items";
 
 export interface DashboardShellProps {
-  navItems: NavItem[];
+  /**
+   * Which nav item set to render. Deliberately a plain string rather than
+   * NavItem[] passed down from the server layout -- NavItem.icon holds a
+   * Lucide component reference, and passing component/function values as
+   * props from a Server Component into a Client Component is not allowed
+   * (React can't serialize them across that boundary).
+   */
+  variant: "student" | "admin";
   user: UserMenuProps;
   children: ReactNode;
 }
 
-export function DashboardShell({ navItems, user, children }: DashboardShellProps) {
+export function DashboardShell({ variant, user, children }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navItems = variant === "admin" ? ADMIN_NAV_ITEMS : STUDENT_NAV_ITEMS;
 
   return (
     <div className="flex min-h-screen flex-col">

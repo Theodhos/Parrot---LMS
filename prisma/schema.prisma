@@ -47,6 +47,12 @@ enum EnrollmentStatus {
   DROPPED
 }
 
+enum AccessStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
 enum QuestionType {
   SINGLE_CHOICE
   MULTIPLE_CHOICE
@@ -127,7 +133,10 @@ model User {
   name          String
   email         String    @unique
   emailVerified DateTime?
-  passwordHash  String?
+  // Identity + password lives entirely in WordPress -- this is the stable
+  // link back to it. Never store a password here; see
+  // features/auth/services/wordpress-bridge.service.ts.
+  wordpressUserId Int?    @unique
   image         String?
   bio           String?
   role          Role      @default(STUDENT)
@@ -179,11 +188,12 @@ model Course {
   category   CourseCategory? @relation(fields: [categoryId], references: [id])
   instructor User            @relation("InstructorCourses", fields: [instructorId], references: [id])
 
-  modules     Module[]
-  enrollments Enrollment[]
-  progress    Progress[]
-  ratings     CourseRating[]
-  activity    LearningActivity[]
+  modules      Module[]
+  enrollments  Enrollment[]
+  progress     Progress[]
+  ratings      CourseRating[]
+  activity     LearningActivity[]
+  courseAccess CourseAccess[]
 
   @@index([status])
   @@index([instructorId])
@@ -228,6 +238,35 @@ model Lesson {
   activity LearningActivity[]
 
   @@index([moduleId, order])
+  @@index([courseId])
+}
+
+// ---------------------------------------------------------------------------
+// WordPress/WooCommerce purchase-access cache
+// ---------------------------------------------------------------------------
+
+/// A fast, idempotent cache of "has this WordPress user purchased this
+/// course" -- written ONLY by the signed webhook handler
+/// (api/webhooks/woocommerce), never by client input. WordPress/WooCommerce
+/// remains the authority on the underlying purchase; this table exists so
+/// access checks are a single indexed read instead of a call out to
+/// WordPress on every request. Keyed by wordpressUserId (not the local
+/// User.id) because a purchase can be synced before the buyer's first
+/// Next.js login.
+model CourseAccess {
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  wordpressUserId  Int
+  courseId         String       @db.ObjectId
+  courseSlug       String
+  woocommerceProductId Int
+  woocommerceOrderId   Int
+  status           AccessStatus @default(ACTIVE)
+  grantedAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([wordpressUserId, courseId])
   @@index([courseId])
 }
 

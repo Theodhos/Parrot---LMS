@@ -29,4 +29,8 @@ export default auth((req) => {
 
 export const config = {
   matcher: ["/dashboard/:path*", "/learn/:path*", "/analytics/:path*", "/profile/:path*", "/admin/:path*"],
+  // Full Auth.js config (Credentials provider + PrismaAdapter) needs Node.js
+  // APIs and Prisma's native engine — neither works on the Edge runtime that
+  // Middleware defaults to.
+  runtime: "nodejs",
 };

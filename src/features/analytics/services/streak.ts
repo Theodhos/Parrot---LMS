@@ -15,7 +15,7 @@ export function computeStreakDays(occurredAtDates: Date[]): number {
   }
 
   let streak = 0;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const key = cursor.toISOString().slice(0, 10);
     if (!dayKeys.has(key)) break;

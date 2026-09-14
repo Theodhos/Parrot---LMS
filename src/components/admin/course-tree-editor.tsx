@@ -91,7 +91,12 @@ export function CourseTreeEditor({ courseId, initialModules }: CourseTreeEditorP
             No modules yet. Add your first module to start building this course.
           </p>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
+          <DndContext
+            id="modules-dnd"
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleModuleDragEnd}
+          >
             <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-2">
                 {modules.map((mod, index) => (

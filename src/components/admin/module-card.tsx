@@ -288,7 +288,12 @@ export function ModuleCard({ courseId, module: mod, index, expanded, onToggleExp
           {lessons.length === 0 ? (
             <p className="text-muted-foreground py-4 text-center text-xs">No lessons in this module yet.</p>
           ) : (
-            <DndContext sensors={lessonSensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd}>
+            <DndContext
+              id={`lessons-dnd-${mod.id}`}
+              sensors={lessonSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleLessonDragEnd}
+            >
               <SortableContext items={lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
                 <div className="flex flex-col gap-1.5">
                   {lessons.map((lesson) => (

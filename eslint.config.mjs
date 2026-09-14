@@ -22,6 +22,9 @@ const eslintConfig = defineConfig([
     "src/generated/**",
     "playwright-report/**",
     "test-results/**",
+    // Vendored local WordPress dev instance (scripts/setup-local-wordpress.sh) --
+    // thousands of PHP/vendored-JS files, not part of this project's source.
+    ".wordpress-dev/**",
   ]),
 ]);
 

@@ -107,6 +107,7 @@ export async function createCourse(user: SessionUser, input: CreateCourseInput) 
     thumbnail: input.thumbnail || null,
     level: input.level,
     status: CourseStatus.DRAFT,
+    woocommerceProductId: input.woocommerceProductId ?? null,
     instructor: { connect: { id: user.id } },
     ...(input.categoryId ? { category: { connect: { id: input.categoryId } } } : {}),
   });
@@ -133,6 +134,9 @@ export async function updateCourse(user: SessionUser, id: string, input: UpdateC
     ...(input.description !== undefined ? { description: input.description } : {}),
     ...(input.thumbnail !== undefined ? { thumbnail: input.thumbnail || null } : {}),
     ...(input.level !== undefined ? { level: input.level } : {}),
+    ...(input.woocommerceProductId !== undefined
+      ? { woocommerceProductId: input.woocommerceProductId }
+      : {}),
     ...(input.categoryId !== undefined
       ? input.categoryId
         ? { category: { connect: { id: input.categoryId } } }

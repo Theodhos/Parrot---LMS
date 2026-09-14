@@ -7,6 +7,8 @@ export const createCourseSchema = z.object({
   thumbnail: z.string().url().optional().or(z.literal("")).optional(),
   categoryId: z.string().length(24).optional().nullable(),
   level: z.enum(CourseLevel).default(CourseLevel.BEGINNER),
+  /** The WooCommerce product that grants access to this course; see the course-platform-bridge plugin. */
+  woocommerceProductId: z.coerce.number().int().positive().optional().nullable(),
   slug: z
     .string()
     .trim()

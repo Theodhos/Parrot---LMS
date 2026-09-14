@@ -68,10 +68,26 @@ export async function updateQuiz(user: SessionUser, lessonId: string, quizId: st
   });
 }
 
+/**
+ * Returns the quiz shape safe to send to a student who is taking it --
+ * `isCorrect` must never reach the client before submission, or the answer
+ * key is trivially visible in the network tab.
+ */
 export async function getQuizForTaking(lessonId: string) {
   const quiz = await quizRepo.findQuizByLesson(lessonId);
   if (!quiz) throw new NotFoundError("Quiz");
-  return quiz;
+
+  return {
+    id: quiz.id,
+    title: quiz.title,
+    questions: quiz.questions.map((q) => ({
+      id: q.id,
+      question: q.question,
+      type: q.type,
+      order: q.order,
+      answers: q.answers.map((a) => ({ id: a.id, answer: a.answer, order: a.order })),
+    })),
+  };
 }
 
 export async function submitQuizAttempt(user: SessionUser, courseId: string, quizId: string, input: SubmitQuizAttemptInput) {

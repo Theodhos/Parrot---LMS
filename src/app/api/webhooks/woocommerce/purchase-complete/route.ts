@@ -33,7 +33,7 @@ export const POST = withApiHandler(async (req: NextRequest) => {
   }
 
   const payload = coursePurchaseCompleteSchema.parse(json);
-  const result = await handleCoursePurchaseComplete(payload);
+  const result = await handleCoursePurchaseComplete(payload, req.headers);
 
   return apiSuccess(result);
 });

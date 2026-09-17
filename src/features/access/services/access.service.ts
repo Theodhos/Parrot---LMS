@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { AccessStatus, CourseStatus, Role } from "@/generated/prisma";
 import { ForbiddenError } from "@/lib/errors/app-error";
-import { siteUrl } from "@/lib/site-url";
+import { siteUrlFromHeaders } from "@/lib/site-url";
 import { canManageCourse, type SessionUser } from "@/lib/permissions";
 import type { CoursePurchaseCompletePayload, WooCommerceWebhookPayload } from "@/features/access/schemas/access.schema";
 import { ensureEnrollment } from "@/features/enrollments/services/enrollment.service";
@@ -123,9 +123,13 @@ export async function syncEnrollmentsFromAccess(userId: string, wordpressUserId:
  *  - an account that already has a password just goes to login -- they
  *    already know it
  */
-export async function handleCoursePurchaseComplete(payload: CoursePurchaseCompletePayload): Promise<{
+export async function handleCoursePurchaseComplete(
+  payload: CoursePurchaseCompletePayload,
+  requestHeaders: Headers,
+): Promise<{
   redirectUrl: string;
 }> {
+  const siteUrl = siteUrlFromHeaders(requestHeaders);
   const courses = await prisma.course.findMany({
     where: { slug: { in: payload.courseSlugs }, status: CourseStatus.PUBLISHED },
     select: { id: true, slug: true },
@@ -153,9 +157,9 @@ export async function handleCoursePurchaseComplete(payload: CoursePurchaseComple
   }
 
   if (user.password) {
-    return { redirectUrl: `${siteUrl()}/login?callbackUrl=${encodeURIComponent("/dashboard")}` };
+    return { redirectUrl: `${siteUrl}/login?callbackUrl=${encodeURIComponent("/dashboard")}` };
   }
 
   const token = await createPasswordSetupToken(user.id);
-  return { redirectUrl: `${siteUrl()}/activate?token=${token}` };
+  return { redirectUrl: `${siteUrl}/activate?token=${token}` };
 }

@@ -17,6 +17,14 @@ if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  // Trust the incoming request's Host header to build redirect URLs instead
+  // of a static NEXTAUTH_URL env var. Vercel's production/preview URLs can
+  // change (or the env var can simply be set wrong, as it was here) --
+  // without this, a misconfigured/stale NEXTAUTH_URL silently sends every
+  // post-login redirect to whatever host it says (e.g. localhost) instead
+  // of wherever the visitor actually is. Safe on Vercel (its edge network
+  // sets Host correctly) and in local dev.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [

@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { getStripe } from "@/lib/payments/stripe";
-import { siteUrl } from "@/lib/site-url";
+import { requestSiteUrl } from "@/lib/site-url";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import type { SessionUser } from "@/lib/permissions";
 import { CourseStatus } from "@/generated/prisma";
@@ -34,7 +34,7 @@ export async function createCourseCheckoutSession(user: SessionUser, courseId: s
   }
 
   const stripe = getStripe();
-  const courseUrl = `${siteUrl()}/courses/${course.slug}`;
+  const courseUrl = `${await requestSiteUrl()}/courses/${course.slug}`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

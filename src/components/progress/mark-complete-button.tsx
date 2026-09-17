@@ -13,7 +13,7 @@ export interface MarkCompleteButtonProps {
   completed: boolean;
 }
 
-/** Marks the current lesson complete, then refreshes the route so the sidebar/progress bar reflect the server-computed state. */
+/** Marks the current lesson complete, then refreshes the route so the surrounding progress reflects the server-computed state. */
 export function MarkCompleteButton({ courseId, lessonId, completed }: MarkCompleteButtonProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -36,17 +36,25 @@ export function MarkCompleteButton({ courseId, lessonId, completed }: MarkComple
 
   if (completed) {
     return (
-      <Button variant="outline" disabled className="text-primary">
-        <CheckCircle2 className="text-primary" />
+      <span
+        role="status"
+        aria-label="Completed"
+        className="flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      >
+        <CheckCircle2 className="size-4" />
         Completed
-      </Button>
+      </span>
     );
   }
 
   return (
-    <Button onClick={handleClick} disabled={isPending}>
-      <Circle />
-      {isPending ? "Marking complete..." : "Mark as completed"}
+    <Button
+      onClick={handleClick}
+      disabled={isPending}
+      className="!rounded-full !bg-orange-500 !text-white hover:!bg-orange-600"
+    >
+      <Circle className="size-4" />
+      {isPending ? "Marking complete..." : "Mark Complete"}
     </Button>
   );
 }

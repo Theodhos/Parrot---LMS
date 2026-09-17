@@ -182,6 +182,8 @@ export function ModuleCard({ courseId, module: mod, index, expanded, onToggleExp
         setLessons((prev) => [...prev, toOutline(result.lesson!, false)]);
         setNewLessonTitle("");
         toast.success("Lesson added.");
+        // Jump straight into the editor -- title-only creation leaves text and video empty.
+        setEditingLessonId(result.lesson.id);
       } else {
         toast.error(result.error ?? "Failed to add lesson.");
       }

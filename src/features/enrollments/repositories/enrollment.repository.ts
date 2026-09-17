@@ -24,7 +24,16 @@ export function listEnrollmentsForUser(userId: string, status?: EnrollmentStatus
           level: true,
           category: { select: { name: true } },
           instructor: { select: { name: true } },
-          modules: { select: { lessons: { select: { id: true, duration: true } } } },
+          modules: {
+            orderBy: { order: "asc" },
+            select: {
+              lessons: {
+                where: { published: true },
+                orderBy: { order: "asc" },
+                select: { id: true, title: true, description: true, duration: true },
+              },
+            },
+          },
         },
       },
     },

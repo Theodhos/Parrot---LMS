@@ -19,15 +19,15 @@ test.describe("lesson progress tracking", () => {
     const { data: view } = await progressRes.json();
     const nextLessonId = view.navigation.nextLessonId ?? view.lesson.id;
 
-    await page.goto(`/learn/${java.courseId}/${nextLessonId}`);
+    await page.goto(`/courses/${java.course.slug}?lesson=${nextLessonId}`);
 
-    const markButton = page.getByRole("button", { name: /mark as completed/i });
+    const markButton = page.getByRole("button", { name: /mark complete/i });
     if (await markButton.isVisible().catch(() => false)) {
       await markButton.click();
-      await expect(page.getByRole("button", { name: /^completed$/i })).toBeVisible();
+      await expect(page.getByRole("status", { name: /^completed$/i })).toBeVisible();
     } else {
       // Already completed from a previous run -- assert the completed state directly.
-      await expect(page.getByRole("button", { name: /^completed$/i })).toBeVisible();
+      await expect(page.getByRole("status", { name: /^completed$/i })).toBeVisible();
     }
   });
 });

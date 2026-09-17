@@ -7,7 +7,9 @@ export const createCourseSchema = z.object({
   thumbnail: z.string().url().optional().or(z.literal("")).optional(),
   categoryId: z.string().length(24).optional().nullable(),
   level: z.enum(CourseLevel).default(CourseLevel.BEGINNER),
-  /** The WooCommerce product that grants access to this course; see the course-platform-bridge plugin. */
+  /** USD, whole dollars -- converted to cents when persisted. 0 (or omitted) means free/self-enroll. */
+  price: z.coerce.number().min(0).max(10000).optional(),
+  /** The WooCommerce product this course's "Buy" button links to; see wordpress-plugin/course-platform-bridge. */
   woocommerceProductId: z.coerce.number().int().positive().optional().nullable(),
   slug: z
     .string()

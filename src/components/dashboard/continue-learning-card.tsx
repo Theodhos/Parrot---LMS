@@ -88,7 +88,7 @@ export function ContinueLearningCard({
   }
 
   const continueHref = course.resumeLessonId
-    ? `/learn/${course.courseId}/${course.resumeLessonId}`
+    ? `/courses/${course.slug}?lesson=${course.resumeLessonId}`
     : `/courses/${course.slug}`;
 
   return (

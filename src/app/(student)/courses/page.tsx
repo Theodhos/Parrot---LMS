@@ -33,6 +33,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     category: category || undefined,
     level: level || undefined,
     page: pageParam || undefined,
+    pageSize: 5,
   });
 
   const [{ items, total, page, pageCount }, categories, enrollments] = await Promise.all([
@@ -42,6 +43,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   ]);
 
   const enrollmentStatusByCourseId = new Map(enrollments.map((e) => [e.courseId, e.status]));
+  const progressByCourseId = new Map(enrollments.map((e) => [e.courseId, e.progressPercent]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,6 +82,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
               key={course.id}
               course={course}
               enrollmentStatus={enrollmentStatusByCourseId.get(course.id) ?? null}
+              progressPercent={progressByCourseId.get(course.id) ?? null}
             />
           ))}
         </div>

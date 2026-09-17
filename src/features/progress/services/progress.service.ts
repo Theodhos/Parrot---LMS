@@ -99,3 +99,9 @@ export async function getCourseProgress(user: SessionUser, courseId: string) {
 export async function getLessonProgress(user: SessionUser, lessonId: string) {
   return progressRepo.findProgress(user.id, lessonId);
 }
+
+/** Completed lesson ids for this user in this course -- used to render per-module progress on the course detail page. */
+export async function getCompletedLessonIds(user: SessionUser, courseId: string): Promise<Set<string>> {
+  const rows = await progressRepo.listCompletedLessonIds(user.id, courseId);
+  return new Set(rows.map((row) => row.lessonId));
+}

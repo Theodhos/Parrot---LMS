@@ -13,9 +13,11 @@ export interface CourseCardProps {
   course: CourseListItemDTO;
   /** Pass the student's enrollment status for this course, or null if not enrolled. */
   enrollmentStatus?: EnrollmentStatus | null;
+  /** Server-computed course progress (0-100). Only rendered when enrolled. */
+  progressPercent?: number | null;
 }
 
-export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps) {
+export function CourseCard({ course, enrollmentStatus = null, progressPercent = null }: CourseCardProps) {
   const href = `/courses/${course.slug}`;
   const isCompleted = enrollmentStatus === EnrollmentStatus.COMPLETED;
   const isEnrolled = enrollmentStatus !== null;
@@ -29,7 +31,7 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
       : "!bg-orange-500 hover:!bg-orange-600";
 
   return (
-    <Card className="overflow-hidden pt-0">
+    <Card className="h-full overflow-hidden pt-0">
       <Link href={href} className="block">
         <div className="relative aspect-video w-full overflow-hidden">
           {course.thumbnail ? (
@@ -57,9 +59,14 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
               {isCompleted ? "Completed" : "Enrolled"}
             </Badge>
           )}
+          {!isEnrolled && (
+            <Badge className="text-foreground absolute top-2 left-2 border-transparent bg-white/95 font-semibold shadow-sm">
+              {course.priceCents > 0 ? `$${(course.priceCents / 100).toFixed(2)}` : "Free"}
+            </Badge>
+          )}
         </div>
       </Link>
-      <CardContent className="flex flex-col gap-2">
+      <CardContent className="flex flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {course.categoryName && (
             <Badge
@@ -96,6 +103,17 @@ export function CourseCard({ course, enrollmentStatus = null }: CourseCardProps)
             </span>
           )}
         </div>
+        {isEnrolled && progressPercent !== null && (
+          <div className="mt-1 flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full", isCompleted ? "bg-emerald-500" : "bg-sky-500")}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="text-muted-foreground shrink-0 text-xs font-medium">{progressPercent}%</span>
+          </div>
+        )}
       </CardContent>
       <CardFooter>
         <Button

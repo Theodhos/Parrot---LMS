@@ -118,8 +118,8 @@ export function LessonEditorDialog({
       const result = await updateLessonAction(courseId, moduleId, lessonId, {
         title,
         description: description || undefined,
-        content: type === LessonType.ARTICLE || type === LessonType.DOCUMENT ? content : undefined,
-        videoUrl: type === LessonType.VIDEO ? videoUrl : "",
+        content: content || undefined,
+        videoUrl: videoUrl || "",
         duration,
         type,
         published,
@@ -215,24 +215,20 @@ export function LessonEditorDialog({
                 </div>
               </div>
 
-              {type === LessonType.VIDEO && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="lesson-video-url">Video URL</Label>
-                  <Input
-                    id="lesson-video-url"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lesson-video-url">Video URL</Label>
+                <Input
+                  id="lesson-video-url"
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
 
-              {(type === LessonType.ARTICLE || type === LessonType.DOCUMENT) && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Content</Label>
-                  <TiptapEditor value={content} onChange={setContent} />
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                <Label>Content</Label>
+                <TiptapEditor value={content} onChange={setContent} />
+              </div>
 
               <label className="flex items-center gap-2.5 text-sm font-medium">
                 <Switch checked={published} onCheckedChange={setPublished} />

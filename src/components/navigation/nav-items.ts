@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, BookOpen, FolderCog, GraduationCap, LayoutDashboard, ImageIcon, User, Users } from "lucide-react";
+import { BarChart3, BookOpen, FolderCog, GraduationCap, LayoutDashboard, ImageIcon, Users, Home, Calendar, Bird } from "lucide-react";
 
 export interface NavItem {
   label: string;
@@ -8,10 +8,11 @@ export interface NavItem {
 }
 
 export const STUDENT_NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Courses", href: "/courses", icon: BookOpen },
-  { label: "Analytics", href: "/analytics", icon: BarChart3 },
-  { label: "Profile", href: "/profile", icon: User },
+  { label: "Home", href: "/dashboard", icon: Home },
+  { label: "Lessons", href: "/courses", icon: BookOpen },
+  { label: "Community", href: "/community", icon: Users },
+  { label: "Calendar", href: "/calendar", icon: Calendar },
+  { label: "My Bird", href: "/profile", icon: Bird },
 ];
 
 export const ADMIN_NAV_ITEMS: NavItem[] = [

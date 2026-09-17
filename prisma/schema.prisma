@@ -124,6 +124,23 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+/// Single-use link issued right after a verified WooCommerce course purchase
+/// (see api/webhooks/woocommerce/purchase-complete) so the buyer can set a
+/// password for the account and log in on Parrot LMS. Never issued for a
+/// user who already has a password -- they just log in normally.
+model PasswordSetupToken {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 // ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
@@ -133,10 +150,15 @@ model User {
   name          String
   email         String    @unique
   emailVerified DateTime?
-  // Identity + password lives entirely in WordPress -- this is the stable
-  // link back to it. Never store a password here; see
-  // features/auth/services/wordpress-bridge.service.ts.
-  wordpressUserId Int?    @unique
+  // bcrypt hash. Null for accounts that only ever signed in via an OAuth
+  // provider (Google/GitHub) -- those never set a local password.
+  password      String?
+  // Legacy link to the retired WordPress/WooCommerce bridge. No longer
+  // written by the app; kept nullable so old rows stay valid. Not @unique:
+  // every local account now omits it, and MongoDB's unique index treats a
+  // missing field as null, so more than one account without it would
+  // otherwise collide on a standard (non-sparse) unique index.
+  wordpressUserId Int?
   image         String?
   bio           String?
   role          Role      @default(STUDENT)
@@ -145,6 +167,7 @@ model User {
 
   accounts Account[]
   sessions Session[]
+  passwordSetupTokens PasswordSetupToken[]
 
   coursesTaught Course[]         @relation("InstructorCourses")
   enrollments   Enrollment[]
@@ -182,9 +205,14 @@ model Course {
   level        CourseLevel  @default(BEGINNER)
   status       CourseStatus @default(DRAFT)
   instructorId String       @db.ObjectId
-  // The WooCommerce product that grants access to this course (set to that
-  // product's _course_id meta on the WordPress side). Lets the "buy" CTA
-  // deep-link straight to checkout instead of a generic store page.
+  // Display price in cents, USD. 0 means free -- the student can self-enroll
+  // with one click. Keep in sync with the real price on the linked
+  // WooCommerce product below; this field is informational only, WooCommerce
+  // is the actual source of truth for what's charged.
+  priceCents   Int          @default(0)
+  // The WooCommerce product that sells this course on the buyer's WordPress
+  // site. Required for a paid course's "Buy" button to have anywhere to
+  // send the buyer -- null shows "not yet available for purchase" instead.
   woocommerceProductId Int?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

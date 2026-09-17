@@ -1,59 +1,55 @@
 import "server-only";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/client";
-import { UnauthorizedError } from "@/lib/errors/app-error";
+import { ConflictError, UnauthorizedError } from "@/lib/errors/app-error";
 import { Role } from "@/generated/prisma";
 import { registerSchema, type RegisterInput } from "@/features/auth/schemas/auth.schema";
-import { wpLogin, wpRegister, type WordPressProfile } from "./wordpress-bridge.service";
-import { syncEnrollmentsFromAccess } from "@/features/access/services/access.service";
+
+const PASSWORD_HASH_ROUNDS = 10;
 
 /**
- * Upserts the local "shadow" profile for a WordPress identity. This local
- * User record is what Enrollment/Progress/Notification/etc. relations key
- * off internally -- but it never holds a password, and role defaults to
- * STUDENT for a first-time sign-in (an admin promotes INSTRUCTOR/ADMIN
- * afterward from the admin panel; that assignment is a Parrot LMS concept,
- * independent of WordPress's own roles).
+ * Creates a brand-new local account. The first account ever created has no
+ * special treatment here -- every self-service signup is a STUDENT; an
+ * admin promotes INSTRUCTOR/ADMIN afterward from the admin panel.
  */
-async function syncLocalUser(profile: WordPressProfile) {
-  const user = await prisma.user.upsert({
-    where: { wordpressUserId: profile.wordpressUserId },
-    create: {
-      wordpressUserId: profile.wordpressUserId,
-      email: profile.email.toLowerCase(),
-      name: profile.name,
+export async function registerUser(input: RegisterInput) {
+  const data = registerSchema.parse(input);
+  const email = data.email.toLowerCase();
+
+  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (existing) {
+    throw new ConflictError("An account with this email already exists");
+  }
+
+  const passwordHash = await bcrypt.hash(data.password, PASSWORD_HASH_ROUNDS);
+  const user = await prisma.user.create({
+    data: {
+      name: data.name,
+      email,
+      password: passwordHash,
       role: Role.STUDENT,
-    },
-    update: {
-      email: profile.email.toLowerCase(),
-      name: profile.name,
     },
   });
 
-  await syncEnrollmentsFromAccess(user.id, profile.wordpressUserId);
-
-  return user;
-}
-
-/** Registers a brand-new account in WordPress, then mirrors it locally. */
-export async function registerUser(input: RegisterInput) {
-  const data = registerSchema.parse(input);
-  const profile = await wpRegister(data.name, data.email, data.password);
-  const user = await syncLocalUser(profile);
   return { id: user.id, name: user.name, email: user.email, role: user.role, wordpressUserId: user.wordpressUserId };
 }
 
 /**
- * Verifies credentials against WordPress -- the password itself never
- * touches this process's memory beyond this call, is never logged, and is
- * never persisted anywhere.
+ * Verifies credentials against the local password hash. The plaintext
+ * password never touches storage or logs -- only the bcrypt comparison
+ * result does.
  */
 export async function verifyCredentials(email: string, password: string) {
-  const profile = await wpLogin(email, password);
-  if (!profile) {
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (!user || !user.password) {
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  const user = await syncLocalUser(profile);
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    throw new UnauthorizedError("Invalid email or password");
+  }
+
   return {
     id: user.id,
     name: user.name,

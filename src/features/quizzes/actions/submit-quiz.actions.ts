@@ -27,7 +27,6 @@ export interface SubmitQuizActionResult {
  */
 export async function submitQuizAttemptAction(
   courseId: string,
-  lessonId: string,
   quizId: string,
   answers: Record<string, string[]>,
 ): Promise<SubmitQuizActionResult> {
@@ -36,10 +35,10 @@ export async function submitQuizAttemptAction(
     const input = submitQuizAttemptSchema.parse({ answers });
     const result = await submitQuizAttempt(user, courseId, quizId, input);
 
-    revalidatePath(`/learn/${courseId}/${lessonId}`);
     revalidatePath("/dashboard");
     revalidatePath("/analytics");
     revalidatePath("/courses");
+    revalidatePath("/courses/[slug]", "page");
 
     return {
       success: true,

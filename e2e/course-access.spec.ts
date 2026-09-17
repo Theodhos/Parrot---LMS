@@ -32,9 +32,10 @@ test.describe("purchase-gated course access", () => {
     const { data: course } = await res.json();
     const lessonId = course.modules[0].lessons[0].id;
 
-    await page.goto(`/learn/${course.id}/${lessonId}`);
-    // The learn page redirects ForbiddenError straight to /dashboard rather
-    // than exposing any protected lesson content.
-    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto(`/courses/${course.slug}?lesson=${lessonId}`);
+    // Without an enrollment the ?lesson= query is ignored entirely -- the page
+    // falls back to the purchase-gated course landing view, never the player.
+    await expect(page).toHaveURL(`/courses/${course.slug}?lesson=${lessonId}`);
+    await expect(page.getByRole("button", { name: /buy this course/i })).toBeVisible();
   });
 });

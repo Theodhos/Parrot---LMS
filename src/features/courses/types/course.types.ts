@@ -17,7 +17,9 @@ export interface CourseListItemDTO {
   enrollmentCount: number;
   averageRating: number | null;
   createdAt: Date;
-  /** The WooCommerce product that grants access -- null means this course has no purchase path configured yet. */
+  /** Display price in cents, USD. 0 means free -- self-enroll with no payment. */
+  priceCents: number;
+  /** The WooCommerce product this course's "Buy" button links to, or null if not yet linked. */
   woocommerceProductId: number | null;
 }
 

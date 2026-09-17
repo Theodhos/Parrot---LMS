@@ -29,10 +29,73 @@ class CPB_WooCommerce {
 		$this->webhooks = $webhooks;
 
 		add_action( 'woocommerce_order_status_changed', array( $this, 'on_order_status_changed' ), 10, 4 );
+		add_action( 'template_redirect', array( $this, 'maybe_redirect_after_purchase' ) );
 
 		// Admin UI: a "Course ID" field on the product edit screen's General tab.
 		add_action( 'woocommerce_product_options_general_product_data', array( $this, 'render_course_id_field' ) );
 		add_action( 'woocommerce_process_product_meta', array( $this, 'save_course_id_field' ) );
+	}
+
+	/**
+	 * Sends the buyer straight from the WooCommerce order-received page to
+	 * Parrot LMS: a one-time "create your password" link for a new account,
+	 * or straight to login for one that already has a password. Runs on
+	 * template_redirect (not woocommerce_thankyou, which fires mid-template
+	 * after headers may already be sent) so wp_redirect() is safe here.
+	 *
+	 * Unlike on_order_status_changed() below, this works for guest checkout
+	 * too -- there's no WordPress user account required, only a billing
+	 * email, since identity lives in Parrot LMS now, not WordPress.
+	 */
+	public function maybe_redirect_after_purchase(): void {
+		if ( ! function_exists( 'is_order_received_page' ) || ! is_order_received_page() ) {
+			return;
+		}
+
+		$order_id = absint( get_query_var( 'order-received' ) );
+		if ( ! $order_id ) {
+			return;
+		}
+
+		$order = wc_get_order( $order_id );
+		if ( ! $order || ! $order->has_status( self::GRANTING_STATUSES ) ) {
+			return;
+		}
+
+		// Idempotent guard: a page refresh (or the order transitioning status
+		// again later) must not re-redirect an order we already handled.
+		if ( 'yes' === $order->get_meta( '_cpb_redirected' ) ) {
+			return;
+		}
+
+		$course_ids = $this->course_ids_in_order( $order );
+		if ( empty( $course_ids ) ) {
+			return;
+		}
+
+		$email = $order->get_billing_email();
+		if ( ! $email ) {
+			return;
+		}
+
+		$redirect_url = $this->webhooks->complete_purchase(
+			array(
+				'email'       => $email,
+				'name'        => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
+				'courseSlugs' => array_values( array_keys( $course_ids ) ),
+				'orderId'     => $order_id,
+			)
+		);
+
+		if ( ! $redirect_url ) {
+			return; // Parrot LMS didn't respond usefully -- leave the buyer on their normal WooCommerce receipt page.
+		}
+
+		$order->update_meta_data( '_cpb_redirected', 'yes' );
+		$order->save();
+
+		wp_redirect( $redirect_url );
+		exit;
 	}
 
 	public function render_course_id_field(): void {

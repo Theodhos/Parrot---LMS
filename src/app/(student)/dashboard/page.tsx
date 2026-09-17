@@ -1,216 +1,172 @@
-import type { CSSProperties } from "react";
-import {
-  CheckCircle2,
-  Clock,
-  Flame,
-  GraduationCap,
-  ListTodo,
-  Percent,
-  Sparkles,
-  Trophy,
-} from "lucide-react";
-import { StatCard } from "@/components/charts/stat-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ContinueLearningCard,
-  type ContinueLearningCourse,
-} from "@/components/dashboard/continue-learning-card";
-import {
-  EnrolledCourseList,
-  type EnrolledCourseItem,
-} from "@/components/dashboard/enrolled-course-list";
-import { RecentActivityList } from "@/components/dashboard/recent-activity-list";
-import { QuizPerformanceSummary } from "@/components/dashboard/quiz-performance-summary";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { formatDuration, formatPercent } from "@/lib/utils";
 import { listMyEnrollments } from "@/features/enrollments/services/enrollment.service";
 import { getStudentAnalytics } from "@/features/analytics/services/student-analytics.service";
 import { getLessonProgress } from "@/features/progress/services/progress.service";
-import type { CourseProgressPoint } from "@/features/analytics/types/analytics.types";
 import { EnrollmentStatus } from "@/generated/prisma";
 import type { SessionUser } from "@/lib/permissions";
-
-/** Rounded display font for the dashboard only -- see the Fredoka `font-heading` override below. */
-const headingFontStyle = { "--font-heading": "var(--font-fredoka)" } as CSSProperties;
-
-/** Finds the first not-yet-completed lesson (in course order), or the last lesson if everything is done. */
-async function findResumeLessonId(user: SessionUser, lessonIds: string[]): Promise<string | null> {
-  if (lessonIds.length === 0) return null;
-  const rows = await Promise.all(lessonIds.map((lessonId) => getLessonProgress(user, lessonId)));
-  const firstIncompleteIndex = rows.findIndex((row) => !row?.completed);
-  const resolvedIndex = firstIncompleteIndex === -1 ? lessonIds.length - 1 : firstIncompleteIndex;
-  return lessonIds[resolvedIndex] ?? null;
-}
+import { TodaysLessonCard } from "@/components/dashboard/todays-lesson-card";
+import { KeepGoingCard } from "@/components/dashboard/keep-going-card";
+import { NoActiveCourseCard } from "@/components/dashboard/no-active-course-card";
+import { QuickLinksCard } from "@/components/dashboard/quick-links-card";
+import { CommunityWinsCard } from "@/components/dashboard/community-wins-card";
+import { BirdProfileCard } from "@/components/dashboard/bird-profile-card";
+import { ThisWeekCard } from "@/components/dashboard/this-week-card";
+import { ActionButtons } from "@/components/dashboard/action-buttons";
 
 type MyEnrollment = Awaited<ReturnType<typeof listMyEnrollments>>[number];
 
-async function buildContinueCourse(
-  user: SessionUser,
-  enrollment: MyEnrollment,
-  progressByCourseId: Map<string, CourseProgressPoint>,
-): Promise<ContinueLearningCourse> {
-  const lessonIds = enrollment.course.modules.flatMap((m) => m.lessons.map((l) => l.id));
-  const resumeLessonId = await findResumeLessonId(user, lessonIds);
-  const courseProgress = progressByCourseId.get(enrollment.courseId);
+interface ResumeLesson {
+  id: string;
+  title: string;
+  description: string | null;
+  duration: number | null;
+  progressPercent: number;
+}
+
+/** Resumes at the first not-yet-completed lesson (in course order), or the last lesson once everything is done. */
+async function findResumeLesson(user: SessionUser, enrollment: MyEnrollment): Promise<ResumeLesson | null> {
+  const lessons = enrollment.course.modules.flatMap((m) => m.lessons);
+  if (lessons.length === 0) return null;
+
+  const progressRows = await Promise.all(lessons.map((l) => getLessonProgress(user, l.id)));
+  const firstIncompleteIndex = progressRows.findIndex((row) => !row?.completed);
+  const resolvedIndex = firstIncompleteIndex === -1 ? lessons.length - 1 : firstIncompleteIndex;
+
+  const lesson = lessons[resolvedIndex];
+  if (!lesson) return null;
+  const row = progressRows[resolvedIndex];
+
   return {
-    courseId: enrollment.courseId,
-    slug: enrollment.course.slug,
-    title: enrollment.course.title,
-    thumbnail: enrollment.course.thumbnail,
-    instructorName: enrollment.course.instructor.name,
-    progressPercent: courseProgress?.progressPercent ?? formatPercent(enrollment.progressPercent),
-    completedLessons: courseProgress?.completedLessons ?? 0,
-    totalLessons: courseProgress?.totalLessons ?? lessonIds.length,
-    resumeLessonId,
+    id: lesson.id,
+    title: lesson.title,
+    description: lesson.description,
+    duration: lesson.duration,
+    progressPercent: row?.completed ? 100 : Math.round(row?.progressPercent ?? 0),
   };
+}
+
+function toDurationMinutes(seconds: number | null, fallback: number): number {
+  const minutes = Math.round((seconds ?? 0) / 60);
+  return minutes > 0 ? minutes : fallback;
 }
 
 export default async function DashboardPage() {
   const user = await requireCurrentUser();
-  const [enrollments, analytics] = await Promise.all([
-    listMyEnrollments(user),
-    getStudentAnalytics(user),
+  const firstName = user.name.split(" ")[0];
+
+  const [enrollments, analytics] = await Promise.all([listMyEnrollments(user), getStudentAnalytics(user)]);
+
+  const activeEnrollments = enrollments.filter((e) => e.status === EnrollmentStatus.ACTIVE).slice(0, 2);
+  const allCompleted = enrollments.length > 0 && enrollments.every((e) => e.status === EnrollmentStatus.COMPLETED);
+  const [primaryEnrollment, secondaryEnrollment] = activeEnrollments;
+  const [primaryLesson, secondaryLesson] = await Promise.all([
+    primaryEnrollment ? findResumeLesson(user, primaryEnrollment) : Promise.resolve(null),
+    secondaryEnrollment ? findResumeLesson(user, secondaryEnrollment) : Promise.resolve(null),
   ]);
 
-  const progressByCourseId = new Map(analytics.progressPerCourse.map((p) => [p.courseId, p]));
-
-  const activeEnrollments = enrollments
-    .filter((e) => e.status === EnrollmentStatus.ACTIVE)
-    .slice(0, 2);
-  const allCompleted =
-    enrollments.length > 0 && enrollments.every((e) => e.status === EnrollmentStatus.COMPLETED);
-  const continueCourses = await Promise.all(
-    activeEnrollments.map((enrollment) =>
-      buildContinueCourse(user, enrollment, progressByCourseId),
-    ),
-  );
-
-  const enrolledItems: EnrolledCourseItem[] = enrollments.map((e) => {
-    const courseProgress = progressByCourseId.get(e.courseId);
-    return {
-      courseId: e.courseId,
-      slug: e.course.slug,
-      title: e.course.title,
-      thumbnail: e.course.thumbnail,
-      instructorName: e.course.instructor.name,
-      status: e.status,
-      progressPercent: courseProgress?.progressPercent ?? formatPercent(e.progressPercent),
-      completedLessons: courseProgress?.completedLessons ?? 0,
-      totalLessons:
-        courseProgress?.totalLessons ??
-        e.course.modules.reduce((sum, m) => sum + m.lessons.length, 0),
-    };
-  });
+  const hasSecondary = Boolean(secondaryEnrollment && secondaryLesson);
 
   return (
-    <div style={headingFontStyle} className="flex flex-col gap-6">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-amber-100 via-orange-50 to-amber-50 p-6 ring-1 ring-amber-200/60 sm:p-8 dark:from-amber-500/10 dark:via-transparent dark:to-transparent dark:ring-amber-500/20">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-300">
-          <Sparkles className="size-3.5" />
-          Your learning hub
-        </span>
-        <h1 className="font-heading mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-          Welcome back, {user.name.split(" ")[0]}!
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Here&apos;s where your learning stands today.
-        </p>
-      </div>
+    <div className="flex w-full max-w-[1400px] flex-col gap-6 pb-10 mx-auto">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-[#f3ecd7] bg-[#FCF6ED] p-8 shadow-sm md:p-12">
+        <div className="relative z-10 max-w-xl">
+          <h1 className="font-heading mb-2 text-4xl font-bold text-[#1f1737] md:text-5xl">
+            Welcome back, {firstName}!
+          </h1>
+          <p className="text-lg font-medium text-[#6D5D3B]">
+            Pick up where you and your bird left off today.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          label="Enrolled courses"
-          value={analytics.totalCourses}
-          icon={<GraduationCap className="size-4" />}
-          iconClassName="bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
-        />
-        <StatCard
-          label="Avg. progress"
-          value={`${analytics.averageCourseProgress}%`}
-          icon={<Percent className="size-4" />}
-          iconClassName="bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
-        />
-        <StatCard
-          label="Lessons completed"
-          value={analytics.totalLessonsCompleted}
-          hint={`${analytics.totalLessonsRemaining} remaining`}
-          icon={<CheckCircle2 className="size-4" />}
-          iconClassName="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-        />
-        <StatCard
-          label="Learning time"
-          value={formatDuration(analytics.totalLearningMinutes * 60)}
-          icon={<Clock className="size-4" />}
-          iconClassName="bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
-        />
-        <StatCard
-          label="Learning streak"
-          value={`${analytics.learningStreakDays}d`}
-          icon={<Flame className="size-4" />}
-          iconClassName="bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
-        />
-      </div>
-
-      {continueCourses.length > 0 ? (
-        <div className={continueCourses.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-          <ContinueLearningCard
-            course={continueCourses[0] ?? null}
-            theme="amber"
-            eyebrow="Continue learning"
+        {/* Decorative bird photo + bee, faded into the hero background */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] md:block" aria-hidden="true">
+          <div
+            className="absolute inset-y-0 right-0 w-full bg-[url('https://images.unsplash.com/photo-1452570053594-1b985d6ea890?q=80&w=500&auto=format&fit=crop')] bg-cover bg-[center_35%]"
+            style={{
+              maskImage: "linear-gradient(to right, transparent, black 30%)",
+              WebkitMaskImage: "linear-gradient(to right, transparent, black 30%)",
+            }}
           />
-          {continueCourses[1] && (
-            <ContinueLearningCard
-              course={continueCourses[1]}
-              theme="emerald"
-              eyebrow="Keep going"
+          <svg
+            viewBox="0 0 90 50"
+            className="absolute left-2 top-8 h-10 w-16 md:left-8 md:top-12"
+            fill="none"
+          >
+            <path
+              d="M2 40 C 20 44, 35 20, 52 18"
+              stroke="#1f1737"
+              strokeWidth="2"
+              strokeDasharray="4 5"
+              strokeLinecap="round"
+              opacity="0.35"
             />
-          )}
-        </div>
-      ) : (
-        <ContinueLearningCard course={null} allCompleted={allCompleted} />
-      )}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-3 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-semibold">My courses</h2>
-            <span className="text-muted-foreground text-xs">
-              {analytics.activeCourses} active · {analytics.completedCourses} completed
-            </span>
-          </div>
-          <EnrolledCourseList items={enrolledItems} />
-        </div>
-
-        <div className="flex flex-col gap-6">
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
-                  <ListTodo className="size-3.5" />
-                </span>
-                Recent activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RecentActivityList items={analytics.recentActivity} />
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="flex size-7 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-                  <Trophy className="size-3.5" />
-                </span>
-                Quiz performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <QuizPerformanceSummary items={analytics.quizPerformance} />
-            </CardContent>
-          </Card>
+            <g transform="translate(52 6)">
+              <ellipse cx="12" cy="12" rx="11" ry="9" fill="#FFD93D" stroke="#3E341F" strokeWidth="1.5" />
+              <path d="M3 12h18M6 5.5h12M6 18.5h12" stroke="#3E341F" strokeWidth="1.5" />
+              <ellipse cx="4" cy="4" rx="5" ry="3.5" fill="white" fillOpacity="0.85" transform="rotate(-20 4 4)" />
+              <ellipse cx="6" cy="20" rx="5" ry="3.5" fill="white" fillOpacity="0.85" transform="rotate(20 6 20)" />
+            </g>
+          </svg>
         </div>
       </div>
+
+      {/* Main Grid Layout */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left Column (Spans 8) */}
+        <div className="flex flex-col gap-6 lg:col-span-8">
+          {/* Top Row: Today's Lesson + Keep Going */}
+          <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-8">
+            <div className={hasSecondary ? "h-full lg:col-span-5" : "h-full lg:col-span-8"}>
+              {primaryEnrollment && primaryLesson ? (
+                <TodaysLessonCard
+                  title={primaryLesson.title}
+                  description={primaryLesson.description ?? `Continue ${primaryEnrollment.course.title} where you left off.`}
+                  progressPercent={primaryLesson.progressPercent}
+                  durationMinutes={toDurationMinutes(primaryLesson.duration, 5)}
+                  href={`/courses/${primaryEnrollment.course.slug}?lesson=${primaryLesson.id}`}
+                />
+              ) : (
+                <NoActiveCourseCard allCompleted={allCompleted} />
+              )}
+            </div>
+            {hasSecondary && secondaryEnrollment && secondaryLesson && (
+              <div className="h-full lg:col-span-3">
+                <KeepGoingCard
+                  title={secondaryLesson.title}
+                  description={
+                    secondaryLesson.description ?? `Keep the momentum going in ${secondaryEnrollment.course.title}.`
+                  }
+                  durationMinutes={toDurationMinutes(secondaryLesson.duration, 3)}
+                  href={`/courses/${secondaryEnrollment.course.slug}?lesson=${secondaryLesson.id}`}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Row: Community Wins */}
+          <div className="flex-1">
+            <CommunityWinsCard />
+          </div>
+        </div>
+
+        {/* Right Column (Spans 4) */}
+        <div className="flex flex-col gap-6 lg:col-span-4">
+          <QuickLinksCard />
+          <BirdProfileCard
+            name="Ellie"
+            species="African Grey"
+            streakDays={analytics.learningStreakDays}
+            favoriteReward="Sunflower Seeds"
+            nextGoal="Use 5 New Words"
+            imageUrl="https://images.unsplash.com/photo-1452570053594-1b985d6ea890?q=80&w=150&auto=format&fit=crop"
+          />
+          <ThisWeekCard />
+        </div>
+      </div>
+
+      {/* Action Buttons Section */}
+      <ActionButtons />
     </div>
   );
 }

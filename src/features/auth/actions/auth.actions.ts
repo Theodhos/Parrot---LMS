@@ -3,6 +3,8 @@
 import { AuthError } from "next-auth";
 import { ZodError } from "zod";
 import { signIn } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/client";
+import { Role } from "@/generated/prisma";
 import { loginSchema } from "@/features/auth/schemas/auth.schema";
 import { registerSchema } from "@/features/auth/schemas/auth.schema";
 import { registerUser } from "@/features/auth/services/auth.service";
@@ -33,7 +35,21 @@ export async function loginAction(
     return { error: "Enter a valid email and password." };
   }
 
-  const callbackUrl = String(formData.get("callbackUrl") || "/dashboard");
+  // An explicit callbackUrl (e.g. redirected here from a protected route) is
+  // always honored. Otherwise, land the user on the dashboard that matches
+  // their role -- admins/instructors go straight to the admin panel.
+  const explicitCallbackUrl = String(formData.get("callbackUrl") || "").trim();
+  let callbackUrl = explicitCallbackUrl;
+  if (!callbackUrl) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: parsed.data.email },
+      select: { role: true },
+    });
+    callbackUrl =
+      existingUser && (existingUser.role === Role.ADMIN || existingUser.role === Role.INSTRUCTOR)
+        ? "/admin/dashboard"
+        : "/dashboard";
+  }
 
   try {
     await signIn("credentials", {

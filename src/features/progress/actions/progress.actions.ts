@@ -27,11 +27,10 @@ export async function markLessonCompleteAction(
     const user = await requireCurrentUser();
     const result = await markLessonComplete(user, courseId, lessonId);
 
-    revalidatePath(`/learn/${courseId}/${lessonId}`);
     revalidatePath("/dashboard");
     revalidatePath("/analytics");
     revalidatePath("/courses");
-    revalidatePath(`/courses/${courseId}`);
+    revalidatePath("/courses/[slug]", "page");
 
     return { success: true, data: result };
   } catch (error) {

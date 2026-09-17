@@ -6,6 +6,8 @@ import { requireCourseAccess } from "@/features/access/services/access.service";
 import * as progressRepo from "@/features/progress/repositories/progress.repository";
 import type { LearnLessonViewDTO } from "@/features/lessons/types/lesson.types";
 
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+
 /**
  * Builds the entire "learn" screen in one pass: sidebar (modules/lessons with
  * completion state), the current lesson's content, its quiz (if any),
@@ -20,6 +22,10 @@ export async function getLearnLessonView(
   courseId: string,
   lessonId: string,
 ): Promise<LearnLessonViewDTO> {
+  if (!OBJECT_ID_RE.test(courseId) || !OBJECT_ID_RE.test(lessonId)) {
+    throw new NotFoundError("Course");
+  }
+
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     include: {
@@ -62,13 +68,16 @@ export async function getLearnLessonView(
 
   const orderedLessonIds = visibleModules.flatMap((m) => m.lessons.map((l) => l.id));
   const currentIndex = orderedLessonIds.indexOf(lessonId);
+  const currentModuleLessons =
+    visibleModules.find((m) => m.id === currentLesson.moduleId)?.lessons ?? [];
+  const currentModuleCompletedLessons = currentModuleLessons.filter((l) => completedIds.has(l.id)).length;
 
   if (!isManager) {
     await progressRepo.recordLessonStarted(user.id, courseId, lessonId);
   }
 
   return {
-    course: { id: course.id, title: course.title, slug: course.slug },
+    course: { id: course.id, title: course.title, slug: course.slug, level: course.level },
     lesson: {
       id: currentLesson.id,
       title: currentLesson.title,
@@ -93,26 +102,39 @@ export async function getLearnLessonView(
           })),
         }
       : null,
-    modules: visibleModules.map((m) => ({
-      id: m.id,
-      title: m.title,
-      order: m.order,
-      lessons: m.lessons.map((l) => ({
-        id: l.id,
-        title: l.title,
-        slug: l.slug,
-        type: l.type,
-        order: l.order,
-        duration: l.duration ?? 0,
-        completed: completedIds.has(l.id),
-        current: l.id === lessonId,
-      })),
-    })),
+    modules: visibleModules.map((m) => {
+      const totalLessons = m.lessons.length;
+      const completedLessons = m.lessons.filter((l) => completedIds.has(l.id)).length;
+      return {
+        id: m.id,
+        title: m.title,
+        order: m.order,
+        lessons: m.lessons.map((l) => ({
+          id: l.id,
+          title: l.title,
+          slug: l.slug,
+          type: l.type,
+          order: l.order,
+          duration: l.duration ?? 0,
+          completed: completedIds.has(l.id),
+          current: l.id === lessonId,
+        })),
+        completedLessons,
+        totalLessons,
+        progressPercent: totalLessons === 0 ? 0 : Math.round((completedLessons / totalLessons) * 100),
+      };
+    }),
     progress: {
       ...progressSummary,
       lessonCompleted: currentProgressRow?.completed ?? false,
       lessonProgressPercent: currentProgressRow?.progressPercent ?? 0,
       lastPosition: currentProgressRow?.lastPosition ?? 0,
+      moduleCompletedLessons: currentModuleCompletedLessons,
+      moduleTotalLessons: currentModuleLessons.length,
+      moduleProgressPercent:
+        currentModuleLessons.length === 0
+          ? 0
+          : Math.round((currentModuleCompletedLessons / currentModuleLessons.length) * 100),
     },
     navigation: {
       previousLessonId: currentIndex > 0 ? (orderedLessonIds[currentIndex - 1] ?? null) : null,

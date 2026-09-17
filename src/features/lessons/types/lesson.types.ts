@@ -1,4 +1,4 @@
-import type { LessonType } from "@/generated/prisma";
+import type { CourseLevel, LessonType } from "@/generated/prisma";
 
 export interface SidebarLessonDTO {
   id: string;
@@ -16,6 +16,9 @@ export interface SidebarModuleDTO {
   title: string;
   order: number;
   lessons: SidebarLessonDTO[];
+  completedLessons: number;
+  totalLessons: number;
+  progressPercent: number;
 }
 
 export interface QuizAnswerDTO {
@@ -38,7 +41,7 @@ export interface QuizForTakingDTO {
 }
 
 export interface LearnLessonViewDTO {
-  course: { id: string; title: string; slug: string };
+  course: { id: string; title: string; slug: string; level: CourseLevel };
   lesson: {
     id: string;
     title: string;
@@ -60,6 +63,9 @@ export interface LearnLessonViewDTO {
     lessonCompleted: boolean;
     lessonProgressPercent: number;
     lastPosition: number;
+    moduleCompletedLessons: number;
+    moduleTotalLessons: number;
+    moduleProgressPercent: number;
   };
   navigation: {
     previousLessonId: string | null;

@@ -192,6 +192,27 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
             <Separator />
 
             <div className="flex flex-col gap-1.5">
+              <Label htmlFor="price">Price (USD)</Label>
+              <Input
+                id="price"
+                name="price"
+                type="number"
+                min={0}
+                step={0.01}
+                defaultValue={course.priceCents / 100}
+                placeholder="0"
+              />
+              <p className="text-muted-foreground text-xs">
+                Leave as 0 for a free course students can enroll in with one click. Any amount
+                above 0 shows a &quot;Buy&quot; button linking to the WooCommerce product below --
+                keep this in sync with that product&apos;s real price.
+              </p>
+              {state.fieldErrors?.price && (
+                <p className="text-destructive text-xs">{state.fieldErrors.price[0]}</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="woocommerceProductId">WooCommerce product ID</Label>
               <Input
                 id="woocommerceProductId"
@@ -200,12 +221,13 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
                 min={1}
                 step={1}
                 defaultValue={course.woocommerceProductId ?? ""}
-                placeholder="Optional"
+                placeholder="Optional -- required for paid courses to be purchasable"
               />
               <p className="text-muted-foreground text-xs">
-                Set this once you&apos;ve created the matching product in WooCommerce, so students
-                can buy access to this course. Leave blank until then — price and checkout itself
-                are managed in WordPress, not here.
+                Create a product for this course on your WordPress/WooCommerce site (mark it
+                virtual, set its &quot;Course ID&quot; field to this course&apos;s slug: {course.slug}),
+                then paste its numeric product ID here. Students land here after completing
+                checkout there.
               </p>
               {state.fieldErrors?.woocommerceProductId && (
                 <p className="text-destructive text-xs">{state.fieldErrors.woocommerceProductId[0]}</p>

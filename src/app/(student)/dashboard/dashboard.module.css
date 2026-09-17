@@ -1,0 +1,152 @@
+.dashboardContainer {
+  font-family: "Nunito", "Quicksand", sans-serif;
+  background-color: #fefdfa; 
+  min-height: 100vh;
+  padding: 2rem 4rem;
+  color: #333;
+}
+
+.welcomeBanner {
+  background-color: #fffaf0;
+  border-radius: 2rem;
+  padding: 3rem 4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  border: 1px solid #faeedb;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.01);
+}
+
+.welcomeText {
+  z-index: 10;
+  position: relative;
+}
+
+.welcomeText h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: #38345c;
+  margin-bottom: 0.5rem;
+  line-height: 1.1;
+}
+
+.welcomeText p {
+  font-size: 1.4rem;
+  color: #8c8c8c;
+  font-weight: 500;
+}
+
+.birdImage {
+  position: absolute;
+  right: 5%;
+  bottom: 0;
+  height: 140%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 340px;
+  gap: 1.5rem;
+}
+
+.leftCol, .middleCol, .rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Specific Cards */
+.todaysLesson {
+  background-color: #fdd876;
+  border-radius: 1.5rem;
+  padding: 2rem;
+  position: relative;
+}
+
+.keepGoing {
+  background-color: #b8d98c;
+  border-radius: 1.5rem;
+  padding: 2rem;
+  position: relative;
+}
+
+.card {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid #f2f2f2;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+
+.cardHeader {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #e56565; 
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+/* Action Buttons Grid */
+.actionButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.actionBtn {
+  border-radius: 1.5rem;
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: white;
+  cursor: pointer;
+  border: none;
+  text-align: left;
+  transition: transform 0.2s;
+}
+
+.actionBtn:hover {
+  transform: translateY(-3px);
+}
+
+.actionBtnLeft {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.actionBtnIcon {
+  background-color: rgba(255,255,255,0.2);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.actionBtn h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.actionBtn p {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.btnRed { background-color: #e86b6a; }
+.btnBlue { background-color: #59a5ff; }
+.btnGreen { background-color: #8cc362; }

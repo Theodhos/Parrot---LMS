@@ -36,6 +36,7 @@ function toListItemDTO(
     enrollmentCount: course._count.enrollments,
     averageRating,
     createdAt: course.createdAt,
+    priceCents: course.priceCents,
     woocommerceProductId: course.woocommerceProductId,
   };
 }
@@ -107,6 +108,7 @@ export async function createCourse(user: SessionUser, input: CreateCourseInput) 
     thumbnail: input.thumbnail || null,
     level: input.level,
     status: CourseStatus.DRAFT,
+    priceCents: input.price !== undefined ? Math.round(input.price * 100) : 0,
     woocommerceProductId: input.woocommerceProductId ?? null,
     instructor: { connect: { id: user.id } },
     ...(input.categoryId ? { category: { connect: { id: input.categoryId } } } : {}),
@@ -134,6 +136,7 @@ export async function updateCourse(user: SessionUser, id: string, input: UpdateC
     ...(input.description !== undefined ? { description: input.description } : {}),
     ...(input.thumbnail !== undefined ? { thumbnail: input.thumbnail || null } : {}),
     ...(input.level !== undefined ? { level: input.level } : {}),
+    ...(input.price !== undefined ? { priceCents: Math.round(input.price * 100) } : {}),
     ...(input.woocommerceProductId !== undefined
       ? { woocommerceProductId: input.woocommerceProductId }
       : {}),

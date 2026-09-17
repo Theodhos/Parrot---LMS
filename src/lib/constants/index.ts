@@ -14,7 +14,7 @@ export const ROUTES = {
   register: "/register",
   studentDashboard: "/dashboard",
   courseDetail: (slug: string) => `/courses/${slug}`,
-  learn: (courseId: string, lessonId: string) => `/learn/${courseId}/${lessonId}`,
+  lesson: (slug: string, lessonId: string) => `/courses/${slug}?lesson=${lessonId}`,
   analytics: "/analytics",
   profile: "/profile",
   adminDashboard: "/admin/dashboard",

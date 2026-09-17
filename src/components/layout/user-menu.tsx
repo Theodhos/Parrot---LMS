@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { LogOut, User } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -32,11 +32,12 @@ function initials(name: string) {
 export function UserMenu({ name, email, image, role }: UserMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <DropdownMenuTrigger className="flex items-center gap-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <Avatar className="size-8">
           {image && <AvatarImage src={image} alt={name} />}
           <AvatarFallback>{initials(name)}</AvatarFallback>
         </Avatar>
+        <ChevronDown className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="flex flex-col">
@@ -51,8 +52,20 @@ export function UserMenu({ name, email, image, role }: UserMenuProps) {
           <User />
           Profile
         </DropdownMenuItem>
+        {(role === "ADMIN" || role === "INSTRUCTOR") && (
+          <>
+            <DropdownMenuItem render={<Link href="/admin/dashboard" />}>
+              <LayoutDashboard />
+              Admin panel
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/dashboard" />}>
+              <User />
+              Student view
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/" })} variant="destructive">
+        <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })} variant="destructive">
           <LogOut />
           Sign out
         </DropdownMenuItem>

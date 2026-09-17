@@ -94,22 +94,15 @@ export function NewCourseForm({ categories }: NewCourseFormProps) {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="woocommerceProductId">WooCommerce product ID</Label>
-        <Input
-          id="woocommerceProductId"
-          name="woocommerceProductId"
-          type="number"
-          min={1}
-          step={1}
-          placeholder="Optional"
-        />
+        <Label htmlFor="price">Price (USD)</Label>
+        <Input id="price" name="price" type="number" min={0} step={0.01} placeholder="0" />
         <p className="text-muted-foreground text-xs">
-          Set this once you&apos;ve created the matching product in WooCommerce, so students can buy
-          access to this course. Leave blank until then — price and checkout itself are managed in
-          WordPress, not here.
+          Leave as 0 for a free course students can enroll in with one click. Any amount above 0
+          shows a &quot;Buy&quot; button -- link it to a WooCommerce product after creating the
+          course.
         </p>
-        {state.fieldErrors?.woocommerceProductId && (
-          <p className="text-destructive text-xs">{state.fieldErrors.woocommerceProductId[0]}</p>
+        {state.fieldErrors?.price && (
+          <p className="text-destructive text-xs">{state.fieldErrors.price[0]}</p>
         )}
       </div>
 

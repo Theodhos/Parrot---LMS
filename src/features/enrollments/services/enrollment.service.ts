@@ -43,9 +43,8 @@ export async function ensureEnrollment(userId: string, courseId: string) {
 }
 
 /**
- * Explicit "start learning" entry point for an already-purchased course.
- * Requires active WooCommerce-verified access -- there is no free
- * self-enroll path in this application; see features/access/services.
+ * Explicit "start learning" entry point. Enrollment is free and self-serve:
+ * any signed-in user can enroll in any published course with one click.
  */
 export async function enrollInCourse(user: SessionUser, courseId: string) {
   const course = await prisma.course.findUnique({
@@ -55,11 +54,6 @@ export async function enrollInCourse(user: SessionUser, courseId: string) {
   if (!course || course.status !== CourseStatus.PUBLISHED) {
     throw new NotFoundError("Course");
   }
-
-  // Imported lazily to avoid a module-init cycle with access.service.ts,
-  // which itself calls ensureEnrollment() from this file.
-  const { requireCourseAccess } = await import("@/features/access/services/access.service");
-  await requireCourseAccess(user, course);
 
   return ensureEnrollment(user.id, courseId);
 }

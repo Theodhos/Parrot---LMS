@@ -16,14 +16,13 @@ import { QuestionType } from "@/generated/prisma";
 
 export interface QuizPlayerProps {
   courseId: string;
-  lessonId: string;
   quiz: QuizForTakingDTO;
 }
 
 type QuizResult = NonNullable<SubmitQuizActionResult["data"]>;
 
 /** Multi-question quiz form. Grading, pass/fail, and lesson auto-completion all happen server-side. */
-export function QuizPlayer({ courseId, lessonId, quiz }: QuizPlayerProps) {
+export function QuizPlayer({ courseId, quiz }: QuizPlayerProps) {
   const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
@@ -46,7 +45,7 @@ export function QuizPlayer({ courseId, lessonId, quiz }: QuizPlayerProps) {
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     startTransition(async () => {
-      const res = await submitQuizAttemptAction(courseId, lessonId, quiz.id, answers);
+      const res = await submitQuizAttemptAction(courseId, quiz.id, answers);
       if (!res.success || !res.data) {
         toast.error(res.error ?? "Could not submit your quiz.");
         return;

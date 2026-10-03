@@ -2,7 +2,7 @@
 
 A production-grade Learning Management System. Next.js (App Router) delivers everything: user identity (email/password, bcrypt), the course platform (browsing, lessons, progress tracking, analytics), and admin course/content management. MongoDB (via Prisma) is the single source of truth for all of it.
 
-Paid courses add one optional piece: **GoHighLevel as the checkout/payment processor and the email delivery system**. A course's "Buy" button links out to a GoHighLevel checkout page; after a *successful* payment, a GoHighLevel workflow calls this app's webhook, which — idempotently, keyed on the GHL transaction id — creates the buyer's account from their checkout email (generated unique username + cryptographically random password, stored bcrypt-hashed), enrolls them with **lifetime access**, records the payment, then **writes the credentials onto the GHL contact's custom fields and adds a trigger tag** — a second GHL workflow reacts to the tag and emails the credentials to the buyer. The app sends no email itself. The course is only accessible after signing in with exactly those credentials; any other password is rejected, and every course/lesson read re-checks the enrollment server-side. A refund/chargeback workflow calls a second webhook that revokes the access (the account survives). Free courses skip this entirely (one-click self-enroll). GoHighLevel is *not* required for the app to run — only for selling paid courses.
+Paid courses add one optional piece: **GoHighLevel as the checkout/payment processor and the email delivery system**. A course's "Buy" button links out to a GoHighLevel checkout page; after a *successful* payment, a GoHighLevel workflow calls this app's webhook, which — idempotently, keyed on the GHL transaction id — creates the buyer's account from their checkout email (no password yet), enrolls them with **lifetime access**, records the payment, then **writes a personal, single-use account-setup link onto the GHL contact's custom field and adds a trigger tag** — a second GHL workflow reacts to the tag and emails the link to the buyer. The buyer opens it, **chooses their own username and password** on `/activate`, and is signed straight in. The app sends no email itself, and no password ever travels by email. The course is only accessible after signing in with exactly those credentials (stored bcrypt-hashed); any other password is rejected, and every course/lesson read re-checks the enrollment server-side. A refund/chargeback workflow calls a second webhook that revokes the access (the account survives). Free courses skip this entirely (one-click self-enroll). GoHighLevel is *not* required for the app to run — only for selling paid courses.
 
 ```
 Next.js (identity, course platform, learning experience, admin CMS)
@@ -15,13 +15,14 @@ Next.js  ──courses/[slug] "Buy" button──▶  GoHighLevel checkout
    │◀── purchase workflow webhook (shared secret)─┘
    │ verify secret + payment status
    │ idempotency check (transaction id)
-   │ create user (unique username, random password -> bcrypt)
+   │ create user (no password yet)
    │ enroll (lifetime, status ACTIVE) + record Payment
-   │── contact custom fields (username/password/login URL) ──▶ GoHighLevel
+   │── contact custom field: single-use /activate link ──────▶ GoHighLevel
    └── add trigger tag ──────────────────────────────────────▶ GHL workflow emails
-                                                               the credentials
-        buyer logs in at /login; the server re-checks
-        the enrollment on every course read
+                                                               the link
+        buyer opens the link, chooses a username + password
+        (bcrypt), is signed in; later logs in at /login. The
+        server re-checks the enrollment on every course read
 ```
 
 A parallel Stripe Checkout integration also exists (`src/features/payments/`) but isn't wired to any button currently — GoHighLevel is the live path.
@@ -87,16 +88,13 @@ All local accounts, password `password123`:
 
 Register a new account in-app (`/register`) to see the "no active course yet" dashboard state.
 
-### 4. GoHighLevel (optional -- only needed for paid-course checkout + credentials email)
+### 4. GoHighLevel (optional -- only needed for paid-course checkout + the access email)
 
 Free courses (price $0) work with no GoHighLevel at all. To sell a paid course:
 
 1. **Secret** -- set `GHL_WEBHOOK_SECRET` to a random string (`openssl rand -hex 32`).
-2. **API token** -- *Settings -> Private Integrations*, create one with the `View Contacts` and `Edit Contacts` scopes. Put it in `GHL_API_TOKEN`. (Required: it's how the app pushes the credentials onto the contact for the email.)
-3. **Custom fields** -- *Settings -> Custom Fields*, add three contact fields (single line text) with these unique keys (or set `GHL_*_FIELD_KEY` env vars to match yours):
-   - `contact.course_username`
-   - `contact.course_password`
-   - `contact.course_login_url`
+2. **API token** -- *Settings -> Private Integrations*, create one with the `View Contacts` and `Edit Contacts` scopes. Put it in `GHL_API_TOKEN`. (Required: it's how the app pushes the buyer's link onto the contact for the email.)
+3. **Custom field** -- *Settings -> Custom Fields*, add one contact field (single line text) with the unique key `contact.course_login_url` (or set `GHL_LOGIN_URL_FIELD_KEY` to match yours). It receives the buyer's personal account-setup link, or the login page for an account that already has a password.
 4. **Checkout** -- create the product and its funnel order form / payment link in GoHighLevel, then paste that page's URL into the course's "GoHighLevel checkout URL" in the admin panel (`/admin/courses/{id}`). The product→course mapping is the `course_slug` Custom Data on that course's purchase workflow (next step).
 5. **Purchase workflow** -- create a workflow per course (this is what grants access — no webhook, no account):
    - Trigger: *Payment Received* (or *Order Submitted*), filtered to that course's product, **successful payments only**.
@@ -105,23 +103,24 @@ Free courses (price $0) work with no GoHighLevel at all. To sell a paid course:
      - `secret` = `GHL_WEBHOOK_SECRET` (or send it as an `x-webhook-secret` header instead)
      - `transaction_id` = the payment/order id merge tag (e.g. `{{payment.id}}` / `{{order.id}}`) — **recommended**: it's the idempotency key that makes a redelivered webhook a safe no-op (no duplicate account, access, or email)
      - optionally `payment_status` = `{{payment.status}}` (anything non-successful is rejected), `amount`, `currency`, `product_id` (bookkeeping on the Payment record)
-6. **Credentials email workflow** (one for the whole sub-account) -- this is what actually emails the buyer:
-   - Trigger: *Contact Tag Added*, tag `course-credentials-ready`. The backend adds this tag only **after** the account, hashed password, ACTIVE access, payment record, and custom fields are all in place.
-   - Action *Send Email*, merging the fields, e.g.:
+6. **Account-setup email workflow** (one for the whole sub-account) -- this is what actually emails the buyer:
+   - Trigger: *Contact Tag Added*, tag `course-credentials-ready`. The backend adds this tag only **after** the account, ACTIVE access, payment record, and the link field are all in place.
+   - Action *Send Email*, merging the link, e.g.:
      > Hello {{contact.first_name}},
      >
-     > Your purchase has been successfully confirmed and your course account has been created.
+     > Your payment has been successfully confirmed and your course is ready.
      >
-     > Username: {{contact.course_username}}
-     > Password: {{contact.course_password}}
-     > Login: {{contact.course_login_url}}
+     > Create your username and password here to get started:
+     > {{contact.course_login_url}}
      >
-     > Use these credentials to log in. Your access is active — you can return to your course whenever you like.
-   - Action *Remove Tag* `course-credentials-ready`, then (recommended) *Update Contact Field* to blank out `course_password`, so the plaintext doesn't linger on the contact after the email is sent.
-7. **"Course unlocked" workflow** (optional) -- same pattern with tag `course-access-granted`: fired for a repeat purchase by an account that already has a password (no password in this email — it just announces the new course and links {{contact.course_login_url}}).
+     > This link is personal, works once, and expires in 48 hours. After that, log in any time with the username and password you chose — your access is permanent.
+   - Action *Remove Tag* `course-credentials-ready`. **Required**: a tag that is still on the contact cannot fire the workflow again, which is how a fresh link gets emailed (see below).
+7. **"Course unlocked" workflow** (optional) -- same pattern with tag `course-access-granted`: fired for a repeat purchase by an account that already has a password. Here {{contact.course_login_url}} is the login page, and the email just announces the new course.
 8. **Refund workflow** (optional but recommended) -- trigger on refund/chargeback for the product, action *Webhook*: `POST https://<your-domain>/api/webhooks/gohighlevel/refund` with the same `secret` and either `transaction_id` or `email` + `course_slug`. This flips the enrollment to REVOKED (course turns 403; the account survives). A later re-purchase re-activates it.
 
-If the handoff to GoHighLevel fails (API down, token missing), the account and access stay valid: the attempt is recorded in the `EmailLog` collection and retried automatically when GoHighLevel redelivers the webhook (a never-delivered password is rotated before the retry — plaintext passwords are never stored in this app's database or logs).
+If the handoff to GoHighLevel fails (API down, token missing), the account and access stay valid: the attempt is recorded in the `EmailLog` collection and retried automatically when GoHighLevel redelivers the webhook.
+
+A setup link expires after 48 hours and works once. For a buyer who missed it, re-run the purchase workflow for that contact in GoHighLevel (same `transaction_id`): while a usable link exists the redelivery is a no-op, but once every link has expired unused the app issues a fresh one and re-adds the tag. No password is ever generated, emailed, or stored in plaintext.
 
 The webhook must reach the app over the public internet, so test against a deployed URL (or a tunnel to `localhost:3010`).
 
@@ -145,8 +144,8 @@ The webhook must reach the app over the public internet, so test against a deplo
    ```bash
    curl -X POST https://<your-domain>/api/webhooks/gohighlevel/purchase      -H "Content-Type: application/json" -H "x-webhook-secret: $GHL_WEBHOOK_SECRET"      -d '{"email":"buyer@example.com","full_name":"Test Buyer","customData":{"course_slug":"<course-slug>","transaction_id":"txn-test-1","payment_status":"succeeded"}}'
    ```
-2. The app provisions the account, writes `course_username` / `course_password` / `course_login_url` onto the GHL contact and adds the `course-credentials-ready` tag; the GHL workflow then emails the credentials. The webhook response reports `newAccount`, `enrolledCourseSlugs` and `emailStatus` (`SENT` = handed to GHL) — never the password. Replaying the same `transaction_id` returns `duplicate: true` and provisions nothing new; once the handoff succeeded, a replay re-adds no tag and triggers no duplicate email.
-3. The buyer signs in at `/login` with the emailed username (or the checkout email) and password — any other password is rejected — and has lifetime access to the purchased course. A repeat purchase by the same email keeps the existing credentials and just unlocks the new course.
+2. The app provisions the account (no password yet), writes the buyer's `/activate?token=...` link onto the GHL contact's `course_login_url` field and adds the `course-credentials-ready` tag; the GHL workflow then emails the link. The webhook response reports `newAccount`, `enrolledCourseSlugs` and `emailStatus` (`SENT` = handed to GHL) — never the link. Replaying the same `transaction_id` returns `duplicate: true` and provisions nothing new; once the handoff succeeded, a replay re-adds no tag and triggers no duplicate email.
+3. The buyer opens the link, chooses a username and password, and lands signed in on the dashboard. From then on they sign in at `/login` with that username (or the checkout email) and password — any other password is rejected — and have lifetime access to the purchased course. A repeat purchase by the same email keeps the existing credentials and just unlocks the new course.
 4. Simulate a refund to revoke access (`duplicate`-safe as well):
    ```bash
    curl -X POST https://<your-domain>/api/webhooks/gohighlevel/refund      -H "Content-Type: application/json" -H "x-webhook-secret: $GHL_WEBHOOK_SECRET"      -d '{"customData":{"transaction_id":"txn-test-1"}}'

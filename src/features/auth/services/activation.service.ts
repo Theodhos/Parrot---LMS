@@ -20,6 +20,21 @@ export async function createPasswordSetupToken(userId: string): Promise<string> 
   return token;
 }
 
+/** Whether the user still holds a setup link they can use (unused and unexpired). */
+export async function hasLivePasswordSetupToken(userId: string): Promise<boolean> {
+  const live = await prisma.passwordSetupToken.findFirst({
+    where: {
+      userId,
+      expiresAt: { gt: new Date() },
+      // MongoDB: `usedAt: null` alone misses rows where the field was never
+      // written, which is every unused token.
+      OR: [{ usedAt: null }, { usedAt: { isSet: false } }],
+    },
+    select: { id: true },
+  });
+  return live !== null;
+}
+
 /** Looks up a token for the "create your password" page. Never reveals *why* a token is invalid beyond this. */
 export async function getPasswordSetupContext(token: string) {
   const row = await prisma.passwordSetupToken.findUnique({

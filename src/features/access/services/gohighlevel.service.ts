@@ -4,19 +4,16 @@ const GHL_API_BASE = "https://services.leadconnectorhq.com";
 const GHL_API_VERSION = "2021-07-28";
 
 /**
- * Contact custom fields the credentials email workflow in GoHighLevel reads
- * ({{contact.course_username}} etc.). Unique keys without the "contact."
- * prefix, overridable per environment when the sub-account's keys differ.
+ * Contact custom field the GoHighLevel email workflows merge as
+ * {{contact.course_login_url}}: the buyer's personal account-setup link, or
+ * the login page for an account that already has a password. Unique key
+ * without the "contact." prefix, overridable when the sub-account's differs.
  */
-export const CREDENTIAL_FIELD_KEYS = {
-  username: process.env.GHL_USERNAME_FIELD_KEY || "course_username",
-  password: process.env.GHL_PASSWORD_FIELD_KEY || "course_password",
-  loginUrl: process.env.GHL_LOGIN_URL_FIELD_KEY || "course_login_url",
-} as const;
+export const ACCESS_LINK_FIELD_KEY = process.env.GHL_LOGIN_URL_FIELD_KEY || "course_login_url";
 
 /** Tags that trigger the matching GoHighLevel email workflow. */
 export const GHL_TAGS = {
-  /** New credentials were generated -- workflow emails username + password + login link. */
+  /** New buyer without a password -- workflow emails the link to create their username and password. */
   credentialsReady: process.env.GHL_CREDENTIALS_TAG || "course-credentials-ready",
   /** Repeat purchase on an account that keeps its password -- workflow emails a "course unlocked" notice. */
   accessGranted: process.env.GHL_ACCESS_GRANTED_TAG || "course-access-granted",
@@ -30,9 +27,9 @@ export interface GhlContactRef {
 
 /**
  * Server-to-server client for the GoHighLevel (LeadConnector) API. Checkout,
- * payment AND the credentials email all live in GoHighLevel; the backend owns
- * identity (MongoDB, bcrypt) and pushes the buyer's login details onto their
- * GHL contact so the email workflow can merge them in. Responses are parsed,
+ * payment AND the access email all live in GoHighLevel; the backend owns
+ * identity (MongoDB, bcrypt) and pushes the buyer's access link onto their
+ * GHL contact so the email workflow can merge it in. Responses are parsed,
  * never logged wholesale -- they can echo the custom fields back.
  */
 async function ghlFetch(path: string, init: { method: string; body: unknown }): Promise<unknown> {
@@ -69,8 +66,8 @@ function contactIdFrom(response: unknown): string | undefined {
  * Writes custom field values onto the buyer's GoHighLevel contact. Uses the
  * contact id from the webhook when there is one; otherwise upserts the
  * contact by email within the location. Returns the contact id so a tag can
- * be added next. Field VALUES never get logged -- one of them is the
- * temporary plaintext password that only GHL's email may carry.
+ * be added next. Field VALUES never get logged -- a single-use setup link
+ * is a credential until the buyer has used it.
  */
 export async function setContactCustomFields(
   contact: GhlContactRef,

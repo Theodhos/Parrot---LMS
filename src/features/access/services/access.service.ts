@@ -1,6 +1,5 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/client";
 import { CourseStatus, EmailStatus, EnrollmentStatus, PaymentStatus, Role, type Payment, type User } from "@/generated/prisma";
 import { ForbiddenError, ValidationError } from "@/lib/errors/app-error";
@@ -9,16 +8,14 @@ import { canManageCourse, type SessionUser } from "@/lib/permissions";
 import type { CoursePurchase, CourseRefund } from "@/features/access/schemas/access.schema";
 import { ensureEnrollment } from "@/features/enrollments/services/enrollment.service";
 import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.repository";
-import { generateTemporaryPassword, generateUniqueUsername } from "@/features/auth/services/credentials.service";
+import { createPasswordSetupToken, hasLivePasswordSetupToken } from "@/features/auth/services/activation.service";
 import {
-  CREDENTIAL_FIELD_KEYS,
+  ACCESS_LINK_FIELD_KEY,
   GHL_TAGS,
   addContactTag,
   setContactCustomFields,
   type GhlContactRef,
 } from "@/features/access/services/gohighlevel.service";
-
-const PASSWORD_HASH_ROUNDS = 10;
 
 /**
  * Throws ForbiddenError unless the user is enrolled in this course (or
@@ -79,18 +76,20 @@ export interface PurchaseResult {
  * account -- there is no self-serve signup path to a paid course.
  *
  * Flow: verify payment success -> idempotency check (Payment.ghlTransactionId)
- * -> find-or-create the account by checkout email (new accounts get a
- * generated unique username + crypto-random password, stored only as a
- * bcrypt hash) -> enroll into every purchased course (lifetime access, no
- * expiry) -> record the Payment row -> hand the credentials to GoHighLevel
- * (contact custom fields + a trigger tag), whose workflow sends the email.
- * The app sends no email itself -- GoHighLevel is the delivery system.
+ * -> find-or-create the account by checkout email (a new account has no
+ * password yet) -> enroll into every purchased course (lifetime access, no
+ * expiry) -> record the Payment row -> hand the buyer's access link to
+ * GoHighLevel (contact custom field + a trigger tag), whose workflow sends
+ * the email. A new buyer gets a single-use /activate link where they choose
+ * their own username and password; an account that already has a password
+ * gets the plain login link. The app sends no email itself, and no password
+ * ever travels by email -- GoHighLevel only delivers the link.
  *
  * Consistency: every step before the Payment row is idempotent (unique
  * email, unique userId+courseId), and the Payment row -- the idempotency
  * marker -- is written last. If provisioning dies halfway, the webhook errors,
  * GoHighLevel redelivers, and the replay completes the remaining steps.
- * A failed credentials handoff never rolls anything back (the EmailLog row
+ * A failed link handoff never rolls anything back (the EmailLog row
  * records it); a redelivered webhook retries it.
  */
 export async function handleCoursePurchase(
@@ -112,7 +111,7 @@ export async function handleCoursePurchase(
     });
     if (existing) {
       console.info(`[webhooks:gohighlevel] duplicate webhook ignored for transaction ${existing.ghlTransactionId}`);
-      const emailStatus = await retryPurchaseEmailIfNeeded(existing, existing.user, loginUrl);
+      const emailStatus = await resendAccessEmailIfNeeded(existing, existing.user, siteUrl);
       return {
         newAccount: false,
         duplicate: true,
@@ -140,33 +139,21 @@ export async function handleCoursePurchase(
 
   // Find or provision the account. An existing account is never duplicated
   // and its password is never touched -- it just gains the new enrollment.
+  // A new account has no password: it cannot be logged into until the buyer
+  // opens their emailed setup link and chooses a username and password.
   let user = await prisma.user.findUnique({ where: { email: purchase.email } });
-  let generatedPassword: string | null = null;
-
   if (!user) {
-    const username = await generateUniqueUsername(purchase.email, purchase.name);
-    generatedPassword = generateTemporaryPassword();
     user = await prisma.user.create({
       data: {
         email: purchase.email,
         name: purchase.name?.trim() || purchase.email.split("@")[0]!,
-        username,
-        password: await bcrypt.hash(generatedPassword, PASSWORD_HASH_ROUNDS),
         role: Role.STUDENT,
+        password: null,
       },
     });
-    console.info(`[webhooks:gohighlevel] user created for ${purchase.email} (username ${username})`);
-  } else if (!user.password) {
-    // Account shell from an earlier flow that never finished setup: give it
-    // real credentials now so the buyer can actually log in.
-    const username = user.username ?? (await generateUniqueUsername(purchase.email, purchase.name));
-    generatedPassword = generateTemporaryPassword();
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: { username, password: await bcrypt.hash(generatedPassword, PASSWORD_HASH_ROUNDS) },
-    });
-    console.info(`[webhooks:gohighlevel] credentials issued for existing account ${purchase.email}`);
+    console.info(`[webhooks:gohighlevel] user created for ${purchase.email}`);
   }
+  const needsSetup = !user.password;
 
   // Lifetime access: an ACTIVE enrollment per purchased course, no expiry.
   // ensureEnrollment is idempotent and re-activates a previously REVOKED one.
@@ -188,20 +175,19 @@ export async function handleCoursePurchase(
       currency: purchase.currency,
       status: PaymentStatus.SUCCEEDED,
       courseSlugs: courses.map((c) => c.slug),
-      issuedCredentials: generatedPassword !== null,
+      issuedCredentials: needsSetup,
     },
   });
 
-  const emailStatus = await triggerCredentialsEmail({
+  const emailStatus = await triggerAccessEmail({
     user,
     paymentId: payment.id,
-    generatedPassword,
     contact: { contactId: purchase.contactId, locationId: purchase.locationId, email: purchase.email },
-    loginUrl,
+    siteUrl,
   });
 
   return {
-    newAccount: generatedPassword !== null,
+    newAccount: needsSetup,
     duplicate: false,
     enrolledCourseSlugs: courses.map((c) => c.slug),
     emailStatus,
@@ -210,30 +196,31 @@ export async function handleCoursePurchase(
 }
 
 /**
- * Hands the buyer's login details to GoHighLevel, which owns email delivery:
- * writes the course_username / course_password / course_login_url contact
- * custom fields FIRST, then adds the trigger tag that fires the matching
- * GHL email workflow. Order matters -- the tag must never fire before the
- * fields it merges are in place. The attempt is recorded as an EmailLog row
- * (SENT = handed off to GHL, FAILED = handoff failed and a webhook
- * redelivery will retry); failures never roll back the account or access.
- * The plaintext password goes ONLY into the GHL custom field the email
- * merges -- never into our database or logs.
+ * Hands the buyer's access link to GoHighLevel, which owns email delivery:
+ * writes the link onto the contact's course_login_url custom field FIRST,
+ * then adds the trigger tag that fires the matching GHL email workflow.
+ * Order matters -- the tag must never fire before the field it merges is in
+ * place. An account without a password gets a fresh single-use /activate
+ * link (the buyer chooses their own username and password there); one that
+ * already has a password gets the login page. The attempt is recorded as an
+ * EmailLog row (SENT = handed off to GHL, FAILED = handoff failed and a
+ * webhook redelivery will retry); failures never roll back the account or
+ * access. The link is a credential until used, so it is never logged.
  */
-async function triggerCredentialsEmail(input: {
+async function triggerAccessEmail(input: {
   user: User;
   paymentId: string;
-  generatedPassword: string | null;
   contact: GhlContactRef;
-  loginUrl: string;
+  siteUrl: string;
 }): Promise<EmailStatus> {
-  const { user, paymentId, generatedPassword, contact, loginUrl } = input;
-  const tag = generatedPassword !== null ? GHL_TAGS.credentialsReady : GHL_TAGS.accessGranted;
+  const { user, paymentId, contact, siteUrl } = input;
+  const needsSetup = !user.password;
+  const tag = needsSetup ? GHL_TAGS.credentialsReady : GHL_TAGS.accessGranted;
 
   const log = await prisma.emailLog.create({
     data: {
       to: user.email,
-      subject: `GoHighLevel credentials workflow (tag: ${tag})`,
+      subject: `GoHighLevel access email workflow (tag: ${tag})`,
       status: EmailStatus.PENDING,
       userId: user.id,
       paymentId,
@@ -241,67 +228,54 @@ async function triggerCredentialsEmail(input: {
   });
 
   try {
-    const contactId = await setContactCustomFields(contact, {
-      [CREDENTIAL_FIELD_KEYS.username]: user.username ?? user.email,
-      // Always written: a repeat purchase that keeps the existing password
-      // overwrites (clears) any stale plaintext left from the first email.
-      [CREDENTIAL_FIELD_KEYS.password]: generatedPassword ?? "",
-      [CREDENTIAL_FIELD_KEYS.loginUrl]: loginUrl,
-    });
+    const link = needsSetup
+      ? `${siteUrl}/activate?token=${await createPasswordSetupToken(user.id)}`
+      : `${siteUrl}/login`;
+    const contactId = await setContactCustomFields(contact, { [ACCESS_LINK_FIELD_KEY]: link });
     await addContactTag(contactId, tag);
 
     await prisma.emailLog.update({
       where: { id: log.id },
       data: { status: EmailStatus.SENT, sentAt: new Date(), error: null },
     });
-    console.info(`[webhooks:gohighlevel] credentials handed to GHL contact ${contactId}, tag "${tag}" added`);
+    console.info(`[webhooks:gohighlevel] access link handed to GHL contact ${contactId}, tag "${tag}" added`);
     return EmailStatus.SENT;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await prisma.emailLog
       .update({ where: { id: log.id }, data: { status: EmailStatus.FAILED, error: message } })
       .catch(() => {});
-    console.error(`[webhooks:gohighlevel] credentials handoff to GHL FAILED for ${user.email}: ${message}`);
+    console.error(`[webhooks:gohighlevel] access link handoff to GHL FAILED for ${user.email}: ${message}`);
     return EmailStatus.FAILED;
   }
 }
 
 /**
- * On a redelivered webhook: if the credentials were never successfully handed
- * to GoHighLevel, rotate the password (the plaintext is not stored here, so
- * the original cannot be re-pushed) and try again. Safe because a
- * FAILED/PENDING-only log means the tag was never added, no email went out,
- * and the buyer cannot have logged in. Once a handoff is SENT, redeliveries
- * change nothing -- no new password, no second tag, no duplicate email.
+ * On a redelivered webhook, hand the link over again only when the buyer
+ * would otherwise be stuck: the first handoff never reached GoHighLevel, or
+ * it did but the account still has no password and every setup link issued
+ * for it has expired (re-running the workflow in GHL is how a late buyer
+ * gets a fresh one). Otherwise nothing happens -- no new link, no second
+ * tag, no duplicate email.
  */
-async function retryPurchaseEmailIfNeeded(payment: Payment, user: User, loginUrl: string): Promise<EmailStatus> {
+async function resendAccessEmailIfNeeded(payment: Payment, user: User, siteUrl: string): Promise<EmailStatus> {
   const delivered = await prisma.emailLog.findFirst({
     where: { paymentId: payment.id, status: EmailStatus.SENT },
     select: { id: true },
   });
-  if (delivered) return EmailStatus.SENT;
-
-  let generatedPassword: string | null = null;
-  let freshUser = user;
-  if (payment.issuedCredentials) {
-    generatedPassword = generateTemporaryPassword();
-    freshUser = await prisma.user.update({
-      where: { id: user.id },
-      data: { password: await bcrypt.hash(generatedPassword, PASSWORD_HASH_ROUNDS) },
-    });
-    console.info(`[webhooks:gohighlevel] credentials handoff retry: password rotated for ${user.email}`);
+  if (delivered && (user.password || (await hasLivePasswordSetupToken(user.id)))) {
+    return EmailStatus.SENT;
   }
 
-  return triggerCredentialsEmail({
-    user: freshUser,
+  return triggerAccessEmail({
+    user,
     paymentId: payment.id,
-    generatedPassword,
     contact: {
       contactId: payment.ghlContactId ?? undefined,
       locationId: payment.ghlLocationId ?? undefined,
       email: user.email,
     },
-    loginUrl,
+    siteUrl,
   });
 }
 

@@ -17,6 +17,8 @@ export const GHL_TAGS = {
   credentialsReady: process.env.GHL_CREDENTIALS_TAG || "course-credentials-ready",
   /** Repeat purchase on an account that keeps its password -- workflow emails a "course unlocked" notice. */
   accessGranted: process.env.GHL_ACCESS_GRANTED_TAG || "course-access-granted",
+  /** Forgot-password request -- workflow emails the link to choose a new password. */
+  passwordReset: process.env.GHL_PASSWORD_RESET_TAG || "course-password-reset",
 } as const;
 
 export interface GhlContactRef {

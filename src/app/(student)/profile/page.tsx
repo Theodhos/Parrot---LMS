@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCurrentUser } from "@/lib/auth/session";
@@ -23,8 +24,21 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-6 text-sm">
           <div>
+            <p className="text-xs text-muted-foreground">Username</p>
+            <p className="font-medium">{profile.username ?? "—"}</p>
+          </div>
+          <div>
             <p className="text-xs text-muted-foreground">Email</p>
             <p className="font-medium">{profile.email}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Password</p>
+            <p className="font-medium">
+              ••••••••{" "}
+              <Link href="/forgot-password" className="text-xs font-normal text-muted-foreground underline underline-offset-4">
+                Reset by email
+              </Link>
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Role</p>

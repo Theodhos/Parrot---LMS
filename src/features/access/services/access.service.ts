@@ -9,13 +9,8 @@ import type { CoursePurchase, CourseRefund } from "@/features/access/schemas/acc
 import { ensureEnrollment } from "@/features/enrollments/services/enrollment.service";
 import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.repository";
 import { createPasswordSetupToken, hasLivePasswordSetupToken } from "@/features/auth/services/activation.service";
-import {
-  ACCESS_LINK_FIELD_KEY,
-  GHL_TAGS,
-  addContactTag,
-  setContactCustomFields,
-  type GhlContactRef,
-} from "@/features/access/services/gohighlevel.service";
+import { GHL_TAGS, type GhlContactRef } from "@/features/access/services/gohighlevel.service";
+import { emailLinkThroughGhl } from "@/features/access/services/ghl-email-handoff";
 
 /**
  * Throws ForbiddenError unless the user is enrolled in this course (or
@@ -196,18 +191,13 @@ export async function handleCoursePurchase(
 }
 
 /**
- * Hands the buyer's access link to GoHighLevel, which owns email delivery:
- * writes the link onto the contact's course_login_url custom field FIRST,
- * then adds the trigger tag that fires the matching GHL email workflow.
- * Order matters -- the tag must never fire before the field it merges is in
- * place. An account without a password gets a fresh single-use /activate
- * link (the buyer chooses their own username and password there); one that
- * already has a password gets the login page. The attempt is recorded as an
- * EmailLog row (SENT = handed off to GHL, FAILED = handoff failed and a
- * webhook redelivery will retry); failures never roll back the account or
- * access. The link is a credential until used, so it is never logged.
+ * Emails the buyer their way in, through GoHighLevel (see emailLinkThroughGhl).
+ * An account without a password gets a fresh single-use /activate link (the
+ * buyer chooses their own username and password there); one that already
+ * has a password gets the login page. A failed handoff never rolls back the
+ * account or access -- a webhook redelivery retries it.
  */
-async function triggerAccessEmail(input: {
+function triggerAccessEmail(input: {
   user: User;
   paymentId: string;
   contact: GhlContactRef;
@@ -215,39 +205,15 @@ async function triggerAccessEmail(input: {
 }): Promise<EmailStatus> {
   const { user, paymentId, contact, siteUrl } = input;
   const needsSetup = !user.password;
-  const tag = needsSetup ? GHL_TAGS.credentialsReady : GHL_TAGS.accessGranted;
 
-  const log = await prisma.emailLog.create({
-    data: {
-      to: user.email,
-      subject: `GoHighLevel access email workflow (tag: ${tag})`,
-      status: EmailStatus.PENDING,
-      userId: user.id,
-      paymentId,
-    },
+  return emailLinkThroughGhl({
+    user,
+    contact,
+    paymentId,
+    tag: needsSetup ? GHL_TAGS.credentialsReady : GHL_TAGS.accessGranted,
+    buildLink: async () =>
+      needsSetup ? `${siteUrl}/activate?token=${await createPasswordSetupToken(user.id)}` : `${siteUrl}/login`,
   });
-
-  try {
-    const link = needsSetup
-      ? `${siteUrl}/activate?token=${await createPasswordSetupToken(user.id)}`
-      : `${siteUrl}/login`;
-    const contactId = await setContactCustomFields(contact, { [ACCESS_LINK_FIELD_KEY]: link });
-    await addContactTag(contactId, tag);
-
-    await prisma.emailLog.update({
-      where: { id: log.id },
-      data: { status: EmailStatus.SENT, sentAt: new Date(), error: null },
-    });
-    console.info(`[webhooks:gohighlevel] access link handed to GHL contact ${contactId}, tag "${tag}" added`);
-    return EmailStatus.SENT;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await prisma.emailLog
-      .update({ where: { id: log.id }, data: { status: EmailStatus.FAILED, error: message } })
-      .catch(() => {});
-    console.error(`[webhooks:gohighlevel] access link handoff to GHL FAILED for ${user.email}: ${message}`);
-    return EmailStatus.FAILED;
-  }
 }
 
 /**

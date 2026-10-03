@@ -45,12 +45,21 @@ enum EnrollmentStatus {
   ACTIVE
   COMPLETED
   DROPPED
+  // Set when the purchase behind the enrollment is refunded/charged back
+  // (see /api/webhooks/gohighlevel/refund) or an admin pulls access. The
+  // account survives; course content turns 403 (see requireCourseAccess).
+  REVOKED
 }
 
-enum AccessStatus {
-  ACTIVE
-  REVOKED
-  EXPIRED
+enum PaymentStatus {
+  SUCCEEDED
+  REFUNDED
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 enum QuestionType {
@@ -124,10 +133,11 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-/// Single-use link issued right after a verified WooCommerce course purchase
-/// (see api/webhooks/woocommerce/purchase-complete) so the buyer can set a
-/// password for the account and log in on Parrot LMS. Never issued for a
-/// user who already has a password -- they just log in normally.
+/// Single-use link issued right after a verified GoHighLevel course purchase
+/// (see api/webhooks/gohighlevel/purchase) and emailed to the buyer so they
+/// can set a username and password for the account and log in on Parrot LMS.
+/// Never issued for a user who already has a password -- they just log in
+/// normally.
 model PasswordSetupToken {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   userId    String    @db.ObjectId
@@ -141,6 +151,69 @@ model PasswordSetupToken {
   @@index([userId])
 }
 
+/// One processed GoHighLevel "order paid" webhook. The unique ghlTransactionId
+/// is the idempotency key: a redelivered webhook for the same transaction finds
+/// this row and returns success without provisioning a second time. Created
+/// LAST in the provisioning flow, so it doubles as the "fully processed"
+/// marker -- if provisioning dies halfway, no Payment row exists and the
+/// redelivery safely re-runs the (individually idempotent) earlier steps.
+/// Never stores card data -- GoHighLevel/Stripe hold that; this is bookkeeping.
+model Payment {
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String        @db.ObjectId
+  // GHL transaction/payment/order id from the webhook's Custom Data. When the
+  // workflow doesn't send one, a synthetic `no-txn:<uuid>` key is stored
+  // instead (idempotency is then best-effort -- see access.service).
+  ghlTransactionId String        @unique
+  ghlContactId     String?
+  ghlProductId     String?
+  ghlLocationId    String?
+  // Informational echo of what GHL reported; GHL/Stripe stay the money
+  // source of truth.
+  amountCents      Int?
+  currency         String?
+  status           PaymentStatus @default(SUCCEEDED)
+  // Course slugs this payment unlocked -- what a refund of this transaction revokes.
+  courseSlugs      String[]
+  // True when this purchase generated fresh credentials for the account
+  // (new buyer). Lets a webhook redelivery know it may rotate + re-email the
+  // password if the credentials email never went out.
+  issuedCredentials Boolean      @default(false)
+  processedAt      DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailLogs EmailLog[]
+
+  @@index([userId])
+}
+
+/// Tracks every credentials-email handoff to GoHighLevel, which owns email
+/// delivery (contact custom fields + trigger tag fire the GHL workflow that
+/// sends the message). SENT = handed to GHL; FAILED keeps the account and
+/// enrollment valid -- the handoff is retried when the webhook is
+/// redelivered. Never stores the plaintext password.
+model EmailLog {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?     @db.ObjectId
+  paymentId String?     @db.ObjectId
+  to        String
+  subject   String
+  status    EmailStatus @default(PENDING)
+  // Provider/transport error message for FAILED sends (never contains secrets).
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([paymentId])
+  @@index([userId])
+}
+
 // ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
@@ -149,11 +222,15 @@ model User {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   name          String
   email         String    @unique
+  // Optional login handle, stored lowercase; chosen on /activate after a
+  // purchase. Not @unique for the same reason as wordpressUserId below --
+  // uniqueness is enforced in activation.service.ts instead.
+  username      String?
   emailVerified DateTime?
   // bcrypt hash. Null for accounts that only ever signed in via an OAuth
   // provider (Google/GitHub) -- those never set a local password.
   password      String?
-  // Legacy link to the retired WordPress/WooCommerce bridge. No longer
+  // Legacy link to the removed WordPress/WooCommerce bridge. No longer
   // written by the app; kept nullable so old rows stay valid. Not @unique:
   // every local account now omits it, and MongoDB's unique index treats a
   // missing field as null, so more than one account without it would
@@ -168,6 +245,8 @@ model User {
   accounts Account[]
   sessions Session[]
   passwordSetupTokens PasswordSetupToken[]
+  payments  Payment[]
+  emailLogs EmailLog[]
 
   coursesTaught Course[]         @relation("InstructorCourses")
   enrollments   Enrollment[]
@@ -179,6 +258,7 @@ model User {
   activity      LearningActivity[]
 
   @@index([role])
+  @@index([username])
 }
 
 // ---------------------------------------------------------------------------
@@ -206,14 +286,14 @@ model Course {
   status       CourseStatus @default(DRAFT)
   instructorId String       @db.ObjectId
   // Display price in cents, USD. 0 means free -- the student can self-enroll
-  // with one click. Keep in sync with the real price on the linked
-  // WooCommerce product below; this field is informational only, WooCommerce
-  // is the actual source of truth for what's charged.
+  // with one click. Keep in sync with the real price on the GoHighLevel
+  // checkout below; this field is informational only, GoHighLevel is the
+  // actual source of truth for what's charged.
   priceCents   Int          @default(0)
-  // The WooCommerce product that sells this course on the buyer's WordPress
-  // site. Required for a paid course's "Buy" button to have anywhere to
-  // send the buyer -- null shows "not yet available for purchase" instead.
-  woocommerceProductId Int?
+  // The GoHighLevel checkout page (funnel/order form/payment link) that sells
+  // this course. Required for a paid course's "Buy" button to have anywhere
+  // to send the buyer -- null shows "not yet available for purchase" instead.
+  ghlCheckoutUrl String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -225,7 +305,6 @@ model Course {
   progress     Progress[]
   ratings      CourseRating[]
   activity     LearningActivity[]
-  courseAccess CourseAccess[]
 
   @@index([status])
   @@index([instructorId])
@@ -270,35 +349,6 @@ model Lesson {
   activity LearningActivity[]
 
   @@index([moduleId, order])
-  @@index([courseId])
-}
-
-// ---------------------------------------------------------------------------
-// WordPress/WooCommerce purchase-access cache
-// ---------------------------------------------------------------------------
-
-/// A fast, idempotent cache of "has this WordPress user purchased this
-/// course" -- written ONLY by the signed webhook handler
-/// (api/webhooks/woocommerce), never by client input. WordPress/WooCommerce
-/// remains the authority on the underlying purchase; this table exists so
-/// access checks are a single indexed read instead of a call out to
-/// WordPress on every request. Keyed by wordpressUserId (not the local
-/// User.id) because a purchase can be synced before the buyer's first
-/// Next.js login.
-model CourseAccess {
-  id               String       @id @default(auto()) @map("_id") @db.ObjectId
-  wordpressUserId  Int
-  courseId         String       @db.ObjectId
-  courseSlug       String
-  woocommerceProductId Int
-  woocommerceOrderId   Int
-  status           AccessStatus @default(ACTIVE)
-  grantedAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  @@unique([wordpressUserId, courseId])
   @@index([courseId])
 }
 

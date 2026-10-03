@@ -34,13 +34,21 @@ export async function registerUser(input: RegisterInput) {
   return { id: user.id, name: user.name, email: user.email, role: user.role, wordpressUserId: user.wordpressUserId };
 }
 
+/** Resolves a login identifier -- an email, or a username (which never contains "@"). */
+export async function findUserByLogin(identifier: string) {
+  const login = identifier.trim().toLowerCase();
+  return login.includes("@")
+    ? prisma.user.findUnique({ where: { email: login } })
+    : prisma.user.findFirst({ where: { username: login } });
+}
+
 /**
  * Verifies credentials against the local password hash. The plaintext
  * password never touches storage or logs -- only the bcrypt comparison
  * result does.
  */
-export async function verifyCredentials(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+export async function verifyCredentials(identifier: string, password: string) {
+  const user = await findUserByLogin(identifier);
   if (!user || !user.password) {
     throw new UnauthorizedError("Invalid email or password");
   }

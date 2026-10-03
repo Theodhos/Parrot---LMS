@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { ActivityType, CourseStatus, NotificationType } from "@/generated/prisma";
+import { ActivityType, CourseStatus, EnrollmentStatus, NotificationType } from "@/generated/prisma";
 import { NotFoundError } from "@/lib/errors/app-error";
 import { requireCourseManager, type SessionUser } from "@/lib/permissions";
 import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.repository";
@@ -14,7 +14,16 @@ import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.
  */
 export async function ensureEnrollment(userId: string, courseId: string) {
   const existing = await enrollmentRepo.findEnrollment(userId, courseId);
-  if (existing) return existing;
+  if (existing) {
+    // A re-purchase after a refund (REVOKED) or a drop restores access.
+    if (existing.status === EnrollmentStatus.REVOKED || existing.status === EnrollmentStatus.DROPPED) {
+      return prisma.enrollment.update({
+        where: { id: existing.id },
+        data: { status: EnrollmentStatus.ACTIVE },
+      });
+    }
+    return existing;
+  }
 
   const course = await prisma.course.findUnique({ where: { id: courseId }, select: { title: true } });
   if (!course) throw new NotFoundError("Course");

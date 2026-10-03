@@ -40,10 +40,10 @@ export default async function ActivatePage({ searchParams }: ActivatePageProps) 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>You&apos;re in! Set your password</CardTitle>
+        <CardTitle>You&apos;re in! Create your login</CardTitle>
         <CardDescription>
-          Your purchase is confirmed for <strong>{context.email}</strong>. Create a password to
-          access your course on Parrot LMS.
+          Your purchase is confirmed for <strong>{context.email}</strong>. Choose a username and
+          password to access your course on Parrot LMS.
         </CardDescription>
       </CardHeader>
       <CardContent>

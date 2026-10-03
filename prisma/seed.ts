@@ -53,8 +53,8 @@ interface CourseSeed {
   categoryId: string;
   /** USD. Omit (or 0) for a free, self-enroll course. */
   priceUsd?: number;
-  /** WooCommerce product id the "Buy" button links to; see the local WordPress dev site. */
-  woocommerceProductId?: number;
+  /** GoHighLevel checkout URL the "Buy" button links to. */
+  ghlCheckoutUrl?: string;
   modules: ModuleSeed[];
 }
 
@@ -70,7 +70,7 @@ async function seedCourse(seed: CourseSeed) {
       instructorId: seed.instructorId,
       categoryId: seed.categoryId,
       priceCents: Math.round((seed.priceUsd ?? 0) * 100),
-      woocommerceProductId: seed.woocommerceProductId ?? null,
+      ghlCheckoutUrl: seed.ghlCheckoutUrl ?? null,
     },
   });
 
@@ -144,7 +144,6 @@ async function main() {
     prisma.module.deleteMany(),
     prisma.course.deleteMany(),
     prisma.courseCategory.deleteMany(),
-    prisma.courseAccess.deleteMany(),
     prisma.media.deleteMany(),
     prisma.session.deleteMany(),
     prisma.account.deleteMany(),
@@ -212,7 +211,6 @@ async function main() {
     instructorId: instructorIan.id,
     categoryId: catProgramming.id,
     priceUsd: 99,
-    woocommerceProductId: 10,
     modules: [
       {
         title: "Introduction",
@@ -293,7 +291,6 @@ async function main() {
     instructorId: instructorPriya.id,
     categoryId: catWeb.id,
     priceUsd: 79,
-    woocommerceProductId: 11,
     modules: [
       {
         title: "Foundations",

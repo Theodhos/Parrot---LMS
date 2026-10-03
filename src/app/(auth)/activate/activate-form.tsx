@@ -21,6 +21,22 @@ export function ActivateForm({ token }: { token: string }) {
         </Alert>
       )}
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          required
+          minLength={3}
+          maxLength={30}
+        />
+        {state.fieldErrors?.username && (
+          <p className="text-destructive text-xs">{state.fieldErrors.username[0]}</p>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" autoComplete="new-password" required />
         {state.fieldErrors?.password && (
@@ -28,7 +44,7 @@ export function ActivateForm({ token }: { token: string }) {
         )}
       </div>
       <Button type="submit" disabled={pending} className="mt-2">
-        {pending ? "Setting up your account..." : "Create password & start learning"}
+        {pending ? "Setting up your account..." : "Create account & start learning"}
       </Button>
     </form>
   );

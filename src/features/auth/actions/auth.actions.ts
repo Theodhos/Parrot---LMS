@@ -3,11 +3,10 @@
 import { AuthError } from "next-auth";
 import { ZodError } from "zod";
 import { signIn } from "@/lib/auth/auth";
-import { prisma } from "@/lib/db/client";
 import { Role } from "@/generated/prisma";
 import { loginSchema } from "@/features/auth/schemas/auth.schema";
 import { registerSchema } from "@/features/auth/schemas/auth.schema";
-import { registerUser } from "@/features/auth/services/auth.service";
+import { findUserByLogin, registerUser } from "@/features/auth/services/auth.service";
 import { AppError } from "@/lib/errors/app-error";
 
 export interface LoginActionState {
@@ -32,7 +31,7 @@ export async function loginAction(
     password: formData.get("password"),
   });
   if (!parsed.success) {
-    return { error: "Enter a valid email and password." };
+    return { error: "Enter your email or username and your password." };
   }
 
   // An explicit callbackUrl (e.g. redirected here from a protected route) is
@@ -41,10 +40,7 @@ export async function loginAction(
   const explicitCallbackUrl = String(formData.get("callbackUrl") || "").trim();
   let callbackUrl = explicitCallbackUrl;
   if (!callbackUrl) {
-    const existingUser = await prisma.user.findUnique({
-      where: { email: parsed.data.email },
-      select: { role: true },
-    });
+    const existingUser = await findUserByLogin(parsed.data.email);
     callbackUrl =
       existingUser && (existingUser.role === Role.ADMIN || existingUser.role === Role.INSTRUCTOR)
         ? "/admin/dashboard"
@@ -62,7 +58,7 @@ export async function loginAction(
     // signIn() redirects internally on success by throwing a special
     // Next.js redirect error -- it must propagate, not be swallowed here.
     if (error instanceof AuthError) {
-      return { error: "Invalid email or password." };
+      return { error: "Invalid email/username or password." };
     }
     throw error;
   }

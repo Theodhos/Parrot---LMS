@@ -3,12 +3,13 @@
 import { AuthError } from "next-auth";
 import { z, ZodError } from "zod";
 import { signIn } from "@/lib/auth/auth";
-import { registerSchema } from "@/features/auth/schemas/auth.schema";
-import { setPasswordFromToken } from "@/features/auth/services/activation.service";
+import { registerSchema, usernameSchema } from "@/features/auth/schemas/auth.schema";
+import { activateAccountFromToken } from "@/features/auth/services/activation.service";
 import { AppError } from "@/lib/errors/app-error";
 
 const activateSchema = z.object({
   token: z.string().min(1),
+  username: usernameSchema,
   password: registerSchema.shape.password,
 });
 
@@ -17,7 +18,7 @@ export interface ActivateActionState {
   fieldErrors?: Record<string, string[] | undefined>;
 }
 
-/** Sets the account's password from a valid activation token, then signs the buyer straight in. */
+/** Sets the account's username and password from a valid activation token, then signs the buyer straight in. */
 export async function activateAccountAction(
   _prevState: ActivateActionState,
   formData: FormData,
@@ -26,9 +27,10 @@ export async function activateAccountAction(
   try {
     const parsed = activateSchema.parse({
       token: formData.get("token"),
+      username: formData.get("username"),
       password: formData.get("password"),
     });
-    const result = await setPasswordFromToken(parsed.token, parsed.password);
+    const result = await activateAccountFromToken(parsed.token, parsed.username, parsed.password);
     email = result.email;
   } catch (error) {
     if (error instanceof ZodError) {
@@ -51,7 +53,7 @@ export async function activateAccountAction(
     // signIn() redirects internally on success by throwing a special
     // Next.js redirect error -- it must propagate, not be swallowed here.
     if (error instanceof AuthError) {
-      return { error: "Password saved -- please sign in." };
+      return { error: "Account created -- please sign in." };
     }
     throw error;
   }

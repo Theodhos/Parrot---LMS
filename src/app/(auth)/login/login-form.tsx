@@ -21,8 +21,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         </Alert>
       )}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Label htmlFor="email">Email or username</Label>
+        <Input id="email" name="email" type="text" autoComplete="username" required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Password</Label>

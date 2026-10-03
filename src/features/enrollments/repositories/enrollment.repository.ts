@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import type { EnrollmentStatus } from "@/generated/prisma";
+import { EnrollmentStatus } from "@/generated/prisma";
 
 export function findEnrollment(userId: string, courseId: string) {
   return prisma.enrollment.findUnique({ where: { userId_courseId: { userId, courseId } } });
@@ -12,7 +12,9 @@ export function createEnrollment(userId: string, courseId: string) {
 
 export function listEnrollmentsForUser(userId: string, status?: EnrollmentStatus) {
   return prisma.enrollment.findMany({
-    where: { userId, ...(status ? { status } : {}) },
+    // Revoked (refunded) and dropped enrollments never surface in a
+    // student's course lists unless explicitly asked for by status.
+    where: { userId, status: status ?? { notIn: [EnrollmentStatus.REVOKED, EnrollmentStatus.DROPPED] } },
     orderBy: { lastAccessedAt: "desc" },
     include: {
       course: {

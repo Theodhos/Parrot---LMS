@@ -9,17 +9,17 @@ import { enrollInCourseAction } from "@/features/enrollments/actions/enrollment.
 
 export interface EnrollFormProps {
   courseId: string;
-  /** Price in cents, USD. 0 means free -- one-click enroll instead of a WooCommerce purchase. */
+  /** Price in cents, USD. 0 means free -- one-click enroll instead of a GoHighLevel purchase. */
   priceCents: number;
-  /** Absolute WooCommerce checkout URL for this course's product, or null if not linked yet. */
+  /** Absolute GoHighLevel checkout URL for this course, or null if not linked yet. */
   buyUrl: string | null;
 }
 
 /**
  * Free courses enroll with one click. Paid courses link out to checkout on
- * the buyer's WordPress/WooCommerce site -- after payment, its
- * order-received page redirects the buyer straight back here (to
- * /activate, or straight to /login if they already have an account).
+ * GoHighLevel -- after payment, the buyer is enrolled under their checkout
+ * email and GoHighLevel emails them their access link (to /activate, or
+ * /login if they already have an account).
  */
 export function EnrollForm({ courseId, priceCents, buyUrl }: EnrollFormProps) {
   const router = useRouter();

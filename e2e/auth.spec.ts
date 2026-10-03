@@ -6,7 +6,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("signs in with WordPress-backed credentials and reaches the dashboard", async ({ page }) => {
+  test("signs in with valid credentials and reaches the dashboard", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill("alice@parrot.dev");
     await page.getByLabel("Password").fill("password123");

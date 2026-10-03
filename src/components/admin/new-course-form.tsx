@@ -98,8 +98,8 @@ export function NewCourseForm({ categories }: NewCourseFormProps) {
         <Input id="price" name="price" type="number" min={0} step={0.01} placeholder="0" />
         <p className="text-muted-foreground text-xs">
           Leave as 0 for a free course students can enroll in with one click. Any amount above 0
-          shows a &quot;Buy&quot; button -- link it to a WooCommerce product after creating the
-          course.
+          shows a &quot;Buy&quot; button -- add its GoHighLevel checkout URL after creating
+          the course.
         </p>
         {state.fieldErrors?.price && (
           <p className="text-destructive text-xs">{state.fieldErrors.price[0]}</p>

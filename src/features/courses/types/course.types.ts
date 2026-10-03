@@ -19,8 +19,8 @@ export interface CourseListItemDTO {
   createdAt: Date;
   /** Display price in cents, USD. 0 means free -- self-enroll with no payment. */
   priceCents: number;
-  /** The WooCommerce product this course's "Buy" button links to, or null if not yet linked. */
-  woocommerceProductId: number | null;
+  /** The GoHighLevel checkout page this course's "Buy" button links to, or null if not yet linked. */
+  ghlCheckoutUrl: string | null;
 }
 
 export interface LessonOutlineDTO {

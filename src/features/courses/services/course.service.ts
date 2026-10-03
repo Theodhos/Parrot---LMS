@@ -37,7 +37,7 @@ function toListItemDTO(
     averageRating,
     createdAt: course.createdAt,
     priceCents: course.priceCents,
-    woocommerceProductId: course.woocommerceProductId,
+    ghlCheckoutUrl: course.ghlCheckoutUrl,
   };
 }
 
@@ -109,7 +109,7 @@ export async function createCourse(user: SessionUser, input: CreateCourseInput) 
     level: input.level,
     status: CourseStatus.DRAFT,
     priceCents: input.price !== undefined ? Math.round(input.price * 100) : 0,
-    woocommerceProductId: input.woocommerceProductId ?? null,
+    ghlCheckoutUrl: input.ghlCheckoutUrl || null,
     instructor: { connect: { id: user.id } },
     ...(input.categoryId ? { category: { connect: { id: input.categoryId } } } : {}),
   });
@@ -137,9 +137,7 @@ export async function updateCourse(user: SessionUser, id: string, input: UpdateC
     ...(input.thumbnail !== undefined ? { thumbnail: input.thumbnail || null } : {}),
     ...(input.level !== undefined ? { level: input.level } : {}),
     ...(input.price !== undefined ? { priceCents: Math.round(input.price * 100) } : {}),
-    ...(input.woocommerceProductId !== undefined
-      ? { woocommerceProductId: input.woocommerceProductId }
-      : {}),
+    ...(input.ghlCheckoutUrl !== undefined ? { ghlCheckoutUrl: input.ghlCheckoutUrl || null } : {}),
     ...(input.categoryId !== undefined
       ? input.categoryId
         ? { category: { connect: { id: input.categoryId } } }

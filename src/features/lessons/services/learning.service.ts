@@ -11,11 +11,9 @@ const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
 /**
  * Builds the entire "learn" screen in one pass: sidebar (modules/lessons with
  * completion state), the current lesson's content, its quiz (if any),
- * prev/next navigation, and the course progress summary. Requires verified
- * WooCommerce purchase access (or enrollment as a fallback signal -- access
- * can theoretically be granted without an Enrollment row existing yet, e.g.
- * immediately after a webhook before the sync-on-login step runs); a course
- * manager may preview without either.
+ * prev/next navigation, and the course progress summary. Requires an
+ * enrollment (see requireCourseAccess); a course manager may preview
+ * without one.
  */
 export async function getLearnLessonView(
   user: SessionUser,

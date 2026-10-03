@@ -2,12 +2,12 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/client";
-import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 
 const TOKEN_TTL_HOURS = 48;
 const PASSWORD_HASH_ROUNDS = 10;
 
-/** Issues a fresh single-use token for a user to set their password (see PasswordSetupToken). */
+/** Issues a fresh single-use token for a user to set their username and password (see PasswordSetupToken). */
 export async function createPasswordSetupToken(userId: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
   await prisma.passwordSetupToken.create({
@@ -34,8 +34,8 @@ export async function getPasswordSetupContext(token: string) {
   return { email: row.user.email, name: row.user.name };
 }
 
-/** Sets the account's password from a valid, unused token and consumes it. */
-export async function setPasswordFromToken(token: string, password: string) {
+/** Sets the account's username and password from a valid, unused token and consumes it. */
+export async function activateAccountFromToken(token: string, username: string, password: string) {
   const row = await prisma.passwordSetupToken.findUnique({ where: { token } });
   if (!row || row.usedAt || row.expiresAt < new Date()) {
     throw new ValidationError("This link is invalid or has expired");
@@ -44,9 +44,21 @@ export async function setPasswordFromToken(token: string, password: string) {
   const user = await prisma.user.findUnique({ where: { id: row.userId } });
   if (!user) throw new NotFoundError("Account");
 
+  const usernameTaken = await prisma.user.findFirst({
+    where: { username, id: { not: user.id } },
+    select: { id: true },
+  });
+  if (usernameTaken) {
+    throw new ConflictError("That username is already taken -- please choose another");
+  }
+
   const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
   await prisma.$transaction([
-    prisma.user.update({ where: { id: user.id }, data: { password: passwordHash } }),
+    prisma.user.update({
+      where: { id: user.id },
+      // Reaching this page required opening the link emailed to this address.
+      data: { username, password: passwordHash, emailVerified: user.emailVerified ?? new Date() },
+    }),
     prisma.passwordSetupToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
   ]);
 

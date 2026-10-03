@@ -63,10 +63,7 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
 
   const enrollment = await getMyEnrollment(user, course.id);
   const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.id));
-  const buyUrl =
-    course.woocommerceProductId && process.env.WORDPRESS_URL
-      ? `${process.env.WORDPRESS_URL.replace(/\/+$/, "")}/?add-to-cart=${course.woocommerceProductId}`
-      : null;
+  const buyUrl = course.ghlCheckoutUrl;
 
   const [progress, resumeLessonId] = enrollment
     ? await Promise.all([getCourseProgress(user, course.id), findResumeLessonId(user, lessonIds)])

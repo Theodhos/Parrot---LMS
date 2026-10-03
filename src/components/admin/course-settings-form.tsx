@@ -204,8 +204,8 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
               />
               <p className="text-muted-foreground text-xs">
                 Leave as 0 for a free course students can enroll in with one click. Any amount
-                above 0 shows a &quot;Buy&quot; button linking to the WooCommerce product below --
-                keep this in sync with that product&apos;s real price.
+                above 0 shows a &quot;Buy&quot; button linking to the GoHighLevel checkout below --
+                keep this in sync with the real price charged there.
               </p>
               {state.fieldErrors?.price && (
                 <p className="text-destructive text-xs">{state.fieldErrors.price[0]}</p>
@@ -213,24 +213,21 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="woocommerceProductId">WooCommerce product ID</Label>
+              <Label htmlFor="ghlCheckoutUrl">GoHighLevel checkout URL</Label>
               <Input
-                id="woocommerceProductId"
-                name="woocommerceProductId"
-                type="number"
-                min={1}
-                step={1}
-                defaultValue={course.woocommerceProductId ?? ""}
-                placeholder="Optional -- required for paid courses to be purchasable"
+                id="ghlCheckoutUrl"
+                name="ghlCheckoutUrl"
+                type="url"
+                defaultValue={course.ghlCheckoutUrl ?? ""}
+                placeholder="https://... (required for paid courses to be purchasable)"
               />
               <p className="text-muted-foreground text-xs">
-                Create a product for this course on your WordPress/WooCommerce site (mark it
-                virtual, set its &quot;Course ID&quot; field to this course&apos;s slug: {course.slug}),
-                then paste its numeric product ID here. Students land here after completing
-                checkout there.
+                Paste the URL of this course&apos;s GoHighLevel checkout page (funnel order form or
+                payment link). In the GoHighLevel workflow that runs after payment, set the
+                webhook&apos;s <code>course_slug</code> to this course&apos;s slug: {course.slug}
               </p>
-              {state.fieldErrors?.woocommerceProductId && (
-                <p className="text-destructive text-xs">{state.fieldErrors.woocommerceProductId[0]}</p>
+              {state.fieldErrors?.ghlCheckoutUrl && (
+                <p className="text-destructive text-xs">{state.fieldErrors.ghlCheckoutUrl[0]}</p>
               )}
             </div>
 

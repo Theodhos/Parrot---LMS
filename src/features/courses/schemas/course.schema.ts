@@ -9,8 +9,14 @@ export const createCourseSchema = z.object({
   level: z.enum(CourseLevel).default(CourseLevel.BEGINNER),
   /** USD, whole dollars -- converted to cents when persisted. 0 (or omitted) means free/self-enroll. */
   price: z.coerce.number().min(0).max(10000).optional(),
-  /** The WooCommerce product this course's "Buy" button links to; see wordpress-plugin/course-platform-bridge. */
-  woocommerceProductId: z.coerce.number().int().positive().optional().nullable(),
+  /** The GoHighLevel checkout page this course's "Buy" button links to. Empty clears it. */
+  ghlCheckoutUrl: z
+    .string()
+    .trim()
+    .url("Enter the full checkout URL, starting with https://")
+    .refine((url) => /^https?:\/\//i.test(url), "Enter the full checkout URL, starting with https://")
+    .optional()
+    .or(z.literal("")),
   slug: z
     .string()
     .trim()

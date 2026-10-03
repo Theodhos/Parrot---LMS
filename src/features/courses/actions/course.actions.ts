@@ -41,7 +41,7 @@ function courseFormInput(formData: FormData) {
     categoryId: formData.get("categoryId") || undefined,
     level: formData.get("level") || undefined,
     price: formData.get("price") || undefined,
-    woocommerceProductId: formData.get("woocommerceProductId") || undefined,
+    ghlCheckoutUrl: formData.get("ghlCheckoutUrl") ?? undefined,
   };
 }
 

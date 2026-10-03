@@ -23,10 +23,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Create one
           </Link>
         </p>
-        <div className="mt-4 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-          <p className="font-medium">Demo accounts (password: password123)</p>
-          <p>admin@parrot.dev · instructor@parrot.dev · alice@parrot.dev</p>
-        </div>
       </CardContent>
     </Card>
   );

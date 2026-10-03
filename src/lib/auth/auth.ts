@@ -15,6 +15,18 @@ if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
   oauthProviders.push(GitHub);
 }
 
+// Auth.js prefers AUTH_URL/NEXTAUTH_URL over the request's Host header even
+// with trustHost, so a local .env value copied to the deployment sends every
+// redirect to localhost. On Vercel, drop such a value and let the Host header
+// decide.
+if (process.env.VERCEL) {
+  for (const key of ["AUTH_URL", "NEXTAUTH_URL"] as const) {
+    if (/\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(process.env[key] ?? "")) {
+      delete process.env[key];
+    }
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   // Trust the incoming request's Host header to build redirect URLs instead

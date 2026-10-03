@@ -6,9 +6,19 @@ export function findUserById(id: string) {
   return prisma.user.findUnique({ where: { id } });
 }
 
-export async function listUsers(params: { page: number; pageSize: number; role?: Role; search?: string }) {
+export async function listUsers(params: {
+  page: number;
+  pageSize: number;
+  role?: Role;
+  search?: string;
+  /** Limits the list to users enrolled in at least one course taught by this instructor. */
+  enrolledWithInstructorId?: string;
+}) {
   const where: Prisma.UserWhereInput = {};
   if (params.role) where.role = params.role;
+  if (params.enrolledWithInstructorId) {
+    where.enrollments = { some: { course: { instructorId: params.enrolledWithInstructorId } } };
+  }
   if (params.search) {
     where.OR = [
       { name: { contains: params.search, mode: "insensitive" } },

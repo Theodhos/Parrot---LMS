@@ -22,7 +22,6 @@ export const ROUTES = {
   adminCourseEditor: (courseId: string) => `/admin/courses/${courseId}`,
   adminUsers: "/admin/users",
   adminAnalytics: "/admin/analytics",
-  adminMedia: "/admin/media",
 } as const;
 
 /** Limit for uploads that pass through the app server (local-disk storage). */

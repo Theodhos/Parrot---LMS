@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { BarChart3, BookOpen, GraduationCap, Percent, TrendingUp, Users } from "lucide-react";
 import { StatCard } from "@/components/charts/stat-card";
 import { SimpleAreaChart } from "@/components/charts/simple-area-chart";
@@ -26,9 +25,7 @@ const enrollmentsConfig = {
 
 export default async function AdminAnalyticsPage() {
   const user = await requireCurrentUser();
-  if (user.role !== Role.ADMIN) {
-    redirect("/admin/dashboard");
-  }
+  const isAdmin = user.role === Role.ADMIN;
 
   const analytics = await getAdminAnalytics(user);
 
@@ -45,12 +42,16 @@ export default async function AdminAnalyticsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground text-sm">Platform-wide learning activity, computed server-side.</p>
+        <p className="text-muted-foreground text-sm">
+          {isAdmin ? "Platform-wide learning activity." : "Learning activity in the courses you teach."}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className={isAdmin ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" : "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"}>
         <StatCard label="Students" value={analytics.totalStudents} icon={<Users className="size-4" />} />
-        <StatCard label="Instructors" value={analytics.totalInstructors} icon={<GraduationCap className="size-4" />} />
+        {isAdmin && (
+          <StatCard label="Instructors" value={analytics.totalInstructors} icon={<GraduationCap className="size-4" />} />
+        )}
         <StatCard
           label="Courses"
           value={analytics.totalCourses}

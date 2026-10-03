@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { UserFiltersBar } from "@/components/admin/user-filters-bar";
 import { UsersTable } from "@/components/admin/users-table";
 import { AdminPagination } from "@/components/admin/admin-pagination";
@@ -17,9 +16,7 @@ function firstString(value: string | string[] | undefined): string | undefined {
 
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   const user = await requireCurrentUser();
-  if (user.role !== Role.ADMIN) {
-    redirect("/admin/dashboard");
-  }
+  const isAdmin = user.role === Role.ADMIN;
 
   const sp = await searchParams;
   const search = firstString(sp.search);
@@ -39,13 +36,19 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
         <p className="text-muted-foreground text-sm">
-          {total} user{total === 1 ? "" : "s"} across the platform.
+          {total} user{total === 1 ? "" : "s"} {isAdmin ? "across the platform" : "enrolled in your courses"}.
         </p>
       </div>
 
-      <UserFiltersBar defaultValues={{ search, role }} />
+      <UserFiltersBar defaultValues={{ search, role }} showRoleFilter={isAdmin} />
 
-      <UsersTable initialItems={items} currentUserId={user.id} />
+      {/* Keyed by its rows: the table copies them into state, so a new filter result must remount it. */}
+      <UsersTable
+        key={items.map((item) => item.id).join(",")}
+        initialItems={items}
+        currentUserId={user.id}
+        canChangeRoles={isAdmin}
+      />
 
       <AdminPagination page={page} pageCount={pageCount} basePath="/admin/users" params={{ search, role }} />
     </div>

@@ -78,53 +78,92 @@ export function quizTitles(quizIds: string[]) {
   return prisma.quiz.findMany({ where: { id: { in: quizIds } }, select: { id: true, title: true } });
 }
 
-// -- Admin-facing (global) -----------------------------------------------
+// -- Management-facing ------------------------------------------------------
+// Each takes an optional list of course ids: omitted for an admin (the whole
+// platform), an instructor's own course ids for an instructor.
+
+const inCourses = (courseIds?: string[]) => (courseIds ? { courseId: { in: courseIds } } : {});
+
+export async function instructorCourseIds(instructorId: string) {
+  const rows = await prisma.course.findMany({ where: { instructorId }, select: { id: true } });
+  return rows.map((r) => r.id);
+}
 
 export function countUsersByRole() {
   return prisma.user.groupBy({ by: ["role"], _count: { _all: true } });
 }
 
-export function countCoursesByStatus() {
-  return prisma.course.groupBy({ by: ["status"], _count: { _all: true } });
+/** People enrolled in at least one of these courses, each counted once. */
+export async function countDistinctStudents(courseIds: string[]) {
+  const rows = await prisma.enrollment.findMany({
+    where: { courseId: { in: courseIds } },
+    distinct: ["userId"],
+    select: { userId: true },
+  });
+  return rows.length;
 }
 
-export function totalEnrollments() {
-  return prisma.enrollment.count();
+export function countCoursesByStatus(courseIds?: string[]) {
+  return prisma.course.groupBy({
+    by: ["status"],
+    where: courseIds ? { id: { in: courseIds } } : {},
+    _count: { _all: true },
+  });
 }
 
-export function completedEnrollments() {
-  return prisma.enrollment.count({ where: { status: EnrollmentStatus.COMPLETED } });
+export function totalEnrollments(courseIds?: string[]) {
+  return prisma.enrollment.count({ where: inCourses(courseIds) });
 }
 
-export function globalAvgProgress() {
-  return prisma.enrollment.aggregate({ _avg: { progressPercent: true } });
+export function completedEnrollments(courseIds?: string[]) {
+  return prisma.enrollment.count({ where: { status: EnrollmentStatus.COMPLETED, ...inCourses(courseIds) } });
 }
 
-export function allCoursesWithEnrollmentCount() {
+export function globalAvgProgress(courseIds?: string[]) {
+  return prisma.enrollment.aggregate({ where: inCourses(courseIds), _avg: { progressPercent: true } });
+}
+
+export function allCoursesWithEnrollmentCount(courseIds?: string[]) {
   return prisma.course.findMany({
+    where: courseIds ? { id: { in: courseIds } } : {},
     select: { id: true, title: true, status: true, _count: { select: { enrollments: true } } },
   });
 }
 
-export function enrollmentCountsByCourse() {
-  return prisma.enrollment.groupBy({ by: ["courseId"], _count: { _all: true }, _avg: { progressPercent: true } });
+export function enrollmentCountsByCourse(courseIds?: string[]) {
+  return prisma.enrollment.groupBy({
+    by: ["courseId"],
+    where: inCourses(courseIds),
+    _count: { _all: true },
+    _avg: { progressPercent: true },
+  });
 }
 
-export function completedEnrollmentCountsByCourse() {
-  return prisma.enrollment.groupBy({ by: ["courseId"], where: { status: EnrollmentStatus.COMPLETED }, _count: { _all: true } });
+export function completedEnrollmentCountsByCourse(courseIds?: string[]) {
+  return prisma.enrollment.groupBy({
+    by: ["courseId"],
+    where: { status: EnrollmentStatus.COMPLETED, ...inCourses(courseIds) },
+    _count: { _all: true },
+  });
 }
 
 export function coursesByIds(ids: string[]) {
   return prisma.course.findMany({ where: { id: { in: ids } }, select: { id: true, title: true, status: true } });
 }
 
-export function enrollmentsInRange(since: Date) {
-  return prisma.enrollment.findMany({ where: { enrolledAt: { gte: since } }, select: { enrolledAt: true } });
+export function enrollmentsInRange(since: Date, courseIds?: string[]) {
+  return prisma.enrollment.findMany({
+    where: { enrolledAt: { gte: since }, ...inCourses(courseIds) },
+    select: { enrolledAt: true },
+  });
 }
 
-export function recentActivityGlobal(limit: number) {
+export function recentActivityGlobal(limit: number, courseIds?: string[]) {
   return prisma.learningActivity.findMany({
-    where: { type: { in: [ActivityType.LESSON_COMPLETED, ActivityType.COURSE_COMPLETED, ActivityType.COURSE_ENROLLED] } },
+    where: {
+      type: { in: [ActivityType.LESSON_COMPLETED, ActivityType.COURSE_COMPLETED, ActivityType.COURSE_ENROLLED] },
+      ...inCourses(courseIds),
+    },
     orderBy: { occurredAt: "desc" },
     take: limit,
     include: {

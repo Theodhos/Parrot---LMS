@@ -17,14 +17,19 @@ const selectClassName =
 
 export interface UserFiltersBarProps {
   defaultValues: { search?: string; role?: string };
+  /** Off for instructors, whose list is their own students only. */
+  showRoleFilter?: boolean;
 }
 
 /** GET-navigated filter form (via next/form) -- no client JS required. */
-export function UserFiltersBar({ defaultValues }: UserFiltersBarProps) {
+export function UserFiltersBar({ defaultValues, showRoleFilter = true }: UserFiltersBarProps) {
   const hasFilters = Boolean(defaultValues.search || defaultValues.role);
 
   return (
-    <Form action="/admin/users" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
+    <Form
+      action="/admin/users"
+      className="bg-card flex flex-wrap items-end gap-3 rounded-xl border p-3"
+    >
       <div className="flex min-w-48 flex-1 flex-col gap-1.5">
         <Label htmlFor="search">Search</Label>
         <div className="relative">
@@ -39,24 +44,36 @@ export function UserFiltersBar({ defaultValues }: UserFiltersBarProps) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="role">Role</Label>
-        <select id="role" name="role" defaultValue={defaultValues.role ?? ""} className={selectClassName}>
-          <option value="">All roles</option>
-          {ROLE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {showRoleFilter && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="role">Role</Label>
+          <select
+            id="role"
+            name="role"
+            defaultValue={defaultValues.role ?? ""}
+            className={selectClassName}
+          >
+            <option value="">All roles</option>
+            {ROLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm">
           Apply filters
         </Button>
         {hasFilters && (
-          <Button variant="ghost" size="sm" type="button" render={<Link href="/admin/users">Clear</Link>} />
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            render={<Link href="/admin/users">Clear</Link>}
+          />
         )}
       </div>
     </Form>

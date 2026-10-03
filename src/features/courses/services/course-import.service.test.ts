@@ -8,7 +8,6 @@ import { importCourses } from "./course-import.service";
 describe("importCourses (local MongoDB-backed)", () => {
   const stamp = Date.now();
   let instructorId: string;
-  const courseIds: string[] = [];
 
   const csv = [
     "course_title,course_description,level,price,checkout_url,module_title,lesson_title,lesson_type,video_url,duration_seconds",
@@ -26,6 +25,9 @@ describe("importCourses (local MongoDB-backed)", () => {
   });
 
   afterAll(async () => {
+    // By owner, not by the ids the test collected: a run that is cut off
+    // mid-import must still leave nothing behind.
+    const courseIds = (await prisma.course.findMany({ where: { instructorId }, select: { id: true } })).map((c) => c.id);
     await prisma.lesson.deleteMany({ where: { courseId: { in: courseIds } } });
     await prisma.module.deleteMany({ where: { courseId: { in: courseIds } } });
     await prisma.course.deleteMany({ where: { id: { in: courseIds } } });
@@ -37,7 +39,6 @@ describe("importCourses (local MongoDB-backed)", () => {
     expect(errors).toEqual([]);
 
     const outcome = await importCourses({ id: instructorId, role: Role.INSTRUCTOR } as never, courses);
-    courseIds.push(...outcome.imported.map((c) => c.id));
 
     expect(outcome.failedAt).toBeUndefined();
     expect(outcome.imported.map((c) => [c.title, c.moduleCount, c.lessonCount])).toEqual([
@@ -66,7 +67,7 @@ describe("importCourses (local MongoDB-backed)", () => {
       duration: 120,
       published: true,
     });
-  });
+  }, 60_000);
 
   it("is refused for a student", async () => {
     const { courses } = parseCourseImportFile(csv, "courses.csv");

@@ -4,7 +4,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { updateUserRoleAction } from "@/features/users/actions/admin-user.actions";
 import { Role } from "@/generated/prisma";
 import { formatDate } from "@/lib/utils";
@@ -31,6 +38,8 @@ export interface UserListItem {
 export interface UsersTableProps {
   initialItems: UserListItem[];
   currentUserId: string;
+  /** Only admins may change roles; the server enforces it regardless of this flag. */
+  canChangeRoles?: boolean;
 }
 
 function initials(name: string) {
@@ -44,7 +53,11 @@ function initials(name: string) {
   );
 }
 
-export function UsersTable({ initialItems, currentUserId }: UsersTableProps) {
+export function UsersTable({
+  initialItems,
+  currentUserId,
+  canChangeRoles = true,
+}: UsersTableProps) {
   const [items, setItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -80,7 +93,7 @@ export function UsersTable({ initialItems, currentUserId }: UsersTableProps) {
             <TableHead>Joined</TableHead>
             <TableHead>Enrollments</TableHead>
             <TableHead>Courses taught</TableHead>
-            <TableHead className="text-right">Change role</TableHead>
+            {canChangeRoles && <TableHead className="text-right">Change role</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -99,28 +112,33 @@ export function UsersTable({ initialItems, currentUserId }: UsersTableProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant="outline" className={`border-transparent font-medium ${ROLE_THEME[u.role]}`}>
+                <Badge
+                  variant="outline"
+                  className={`border-transparent font-medium ${ROLE_THEME[u.role]}`}
+                >
                   {u.role}
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
               <TableCell>{u._count.enrollments}</TableCell>
               <TableCell>{u._count.coursesTaught}</TableCell>
-              <TableCell className="text-right">
-                <select
-                  value={u.role}
-                  disabled={pendingId === u.id || u.id === currentUserId}
-                  onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
-                  className={selectClassName}
-                  title={u.id === currentUserId ? "You can't change your own role" : undefined}
-                >
-                  {Object.values(Role).map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </TableCell>
+              {canChangeRoles && (
+                <TableCell className="text-right">
+                  <select
+                    value={u.role}
+                    disabled={pendingId === u.id || u.id === currentUserId}
+                    onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
+                    className={selectClassName}
+                    title={u.id === currentUserId ? "You can't change your own role" : undefined}
+                  >
+                    {Object.values(Role).map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

@@ -135,7 +135,7 @@ Files in a public store are reachable by anyone who has the exact URL. The URLs 
 
 ## Adding content in bulk
 
-- **Drop files into a module** (`/admin/courses/{id}`, expand a module): drag in any number of videos or documents. Each becomes a lesson named after its file, in file-name order -- a video becomes a VIDEO lesson (its length is read automatically), anything else a DOCUMENT lesson linking to the file. The same uploader backs the Media page.
+- **Drop files into a module** (`/admin/courses/{id}`, expand a module): drag in any number of videos or documents. Each becomes a lesson named after its file, in file-name order -- a video becomes a VIDEO lesson (its length is read automatically), anything else a DOCUMENT lesson linking to the file.
 - **Import courses from a file** (`/admin/courses` -> *Import courses*): drop a `.csv` (opens in Excel; `,` or `;` separated) or `.json` file. CSV has one row per lesson with the columns `course_title, course_description, level, price, checkout_url, module_title, lesson_title, lesson_type, video_url, duration_seconds, lesson_description`; rows sharing a course and module name are grouped, and course-level columns only need filling on a course's first row. The dialog offers a template, previews what the file contains, and lists any problem by course/module/lesson name before anything is created. Imported courses arrive as drafts.
 
 ## Scripts

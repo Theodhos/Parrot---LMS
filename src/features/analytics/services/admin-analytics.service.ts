@@ -9,8 +9,15 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function getAdminAnalytics(admin: SessionUser): Promise<AdminAnalyticsDTO> {
-  requireRole(admin, Role.ADMIN);
+/**
+ * The management analytics behind /admin/dashboard and /admin/analytics. An
+ * admin gets the whole platform. An instructor gets the same figures counted
+ * over their own courses only -- their students, their enrollments, activity
+ * in their courses -- and never anything about courses they do not teach.
+ */
+export async function getAdminAnalytics(user: SessionUser): Promise<AdminAnalyticsDTO> {
+  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+  const scope = user.role === Role.INSTRUCTOR ? await repo.instructorCourseIds(user.id) : undefined;
 
   const [
     roleGroups,
@@ -24,20 +31,24 @@ export async function getAdminAnalytics(admin: SessionUser): Promise<AdminAnalyt
     enrollmentsLast30,
     recentActivity,
   ] = await Promise.all([
-    repo.countUsersByRole(),
-    repo.countCoursesByStatus(),
-    repo.totalEnrollments(),
-    repo.completedEnrollments(),
-    repo.globalAvgProgress(),
-    repo.allCoursesWithEnrollmentCount(),
-    repo.enrollmentCountsByCourse(),
-    repo.completedEnrollmentCountsByCourse(),
-    repo.enrollmentsInRange(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
-    repo.recentActivityGlobal(15),
+    scope ? null : repo.countUsersByRole(),
+    repo.countCoursesByStatus(scope),
+    repo.totalEnrollments(scope),
+    repo.completedEnrollments(scope),
+    repo.globalAvgProgress(scope),
+    repo.allCoursesWithEnrollmentCount(scope),
+    repo.enrollmentCountsByCourse(scope),
+    repo.completedEnrollmentCountsByCourse(scope),
+    repo.enrollmentsInRange(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), scope),
+    repo.recentActivityGlobal(15, scope),
   ]);
 
-  const totalStudents = roleGroups.find((g) => g.role === Role.STUDENT)?._count._all ?? 0;
-  const totalInstructors = roleGroups.find((g) => g.role === Role.INSTRUCTOR)?._count._all ?? 0;
+  // For an instructor, "students" means the people enrolled in their courses;
+  // the platform's instructor head-count is not theirs to see.
+  const totalStudents = roleGroups
+    ? (roleGroups.find((g) => g.role === Role.STUDENT)?._count._all ?? 0)
+    : await repo.countDistinctStudents(scope ?? []);
+  const totalInstructors = roleGroups?.find((g) => g.role === Role.INSTRUCTOR)?._count._all ?? 0;
 
   const publishedCourses = statusGroups.find((g) => g.status === CourseStatus.PUBLISHED)?._count._all ?? 0;
   const draftCourses = statusGroups.find((g) => g.status === CourseStatus.DRAFT)?._count._all ?? 0;

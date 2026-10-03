@@ -19,9 +19,16 @@ export async function updateProfile(user: SessionUser, input: UpdateProfileInput
   });
 }
 
-export async function listUsers(admin: SessionUser, query: ListUsersQuery) {
-  requireRole(admin, Role.ADMIN);
-  const { total, users } = await userRepo.listUsers(query);
+/**
+ * An admin sees every account. An instructor sees only the people enrolled
+ * in their own courses -- never the rest of the platform's accounts.
+ */
+export async function listUsers(user: SessionUser, query: ListUsersQuery) {
+  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+  const { total, users } = await userRepo.listUsers({
+    ...query,
+    ...(user.role === Role.INSTRUCTOR ? { enrolledWithInstructorId: user.id } : {}),
+  });
   return { items: users, total, page: query.page, pageSize: query.pageSize, pageCount: Math.ceil(total / query.pageSize) };
 }
 

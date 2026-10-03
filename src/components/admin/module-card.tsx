@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { LessonEditorDialog } from "@/components/admin/lesson-editor-dialog";
+import { LessonDropZone } from "@/components/admin/lesson-drop-zone";
 import { LESSON_TYPE_THEME } from "@/components/courses/course-theme";
 import { cn, formatDuration } from "@/lib/utils";
 import { deleteModuleAction } from "@/features/modules/actions/module.actions";
@@ -329,6 +330,12 @@ export function ModuleCard({ courseId, module: mod, index, expanded, onToggleExp
               {creating ? "Adding..." : "Add lesson"}
             </Button>
           </div>
+
+          <LessonDropZone
+            courseId={courseId}
+            moduleId={mod.id}
+            onLessonCreated={(record) => setLessons((prev) => [...prev, toOutline(record, false)])}
+          />
         </div>
       )}
 

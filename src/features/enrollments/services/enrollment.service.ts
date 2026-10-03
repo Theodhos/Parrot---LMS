@@ -1,8 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { ActivityType, CourseStatus, EnrollmentStatus, NotificationType } from "@/generated/prisma";
-import { NotFoundError } from "@/lib/errors/app-error";
-import { requireCourseManager, type SessionUser } from "@/lib/permissions";
+import { ForbiddenError, NotFoundError } from "@/lib/errors/app-error";
+import { canManageCourse, requireCourseManager, type SessionUser } from "@/lib/permissions";
+import { hasAllCourseAccess } from "@/features/access/services/all-access";
 import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.repository";
 
 /**
@@ -52,16 +53,31 @@ export async function ensureEnrollment(userId: string, courseId: string) {
 }
 
 /**
- * Explicit "start learning" entry point. Enrollment is free and self-serve:
- * any signed-in user can enroll in any published course with one click.
+ * Explicit "start learning" entry point, reachable by any signed-in user
+ * (server action and POST /api/enrollments). Self-serve enrollment is only
+ * for free courses: a paid course opens through a verified purchase (the
+ * GoHighLevel webhook), never by asking for it here. Course managers and
+ * holders of an all-courses purchase may enroll in anything.
  */
 export async function enrollInCourse(user: SessionUser, courseId: string) {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    select: { id: true, instructorId: true, status: true },
+    select: { id: true, instructorId: true, status: true, priceCents: true },
   });
   if (!course || course.status !== CourseStatus.PUBLISHED) {
     throw new NotFoundError("Course");
+  }
+
+  const existing = await enrollmentRepo.findEnrollment(user.id, courseId);
+  const usable =
+    existing && existing.status !== EnrollmentStatus.REVOKED && existing.status !== EnrollmentStatus.DROPPED;
+  if (
+    course.priceCents > 0 &&
+    !usable &&
+    !canManageCourse(user, course) &&
+    !(await hasAllCourseAccess(user.id))
+  ) {
+    throw new ForbiddenError("This course must be purchased before you can access it");
   }
 
   return ensureEnrollment(user.id, courseId);

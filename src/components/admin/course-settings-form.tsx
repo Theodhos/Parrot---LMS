@@ -224,7 +224,8 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
               <p className="text-muted-foreground text-xs">
                 Paste the URL of this course&apos;s GoHighLevel checkout page (funnel order form or
                 payment link). In the GoHighLevel workflow that runs after payment, set the
-                webhook&apos;s <code>course_slug</code> to this course&apos;s slug: {course.slug}
+                webhook&apos;s <code>course_slug</code> to this course&apos;s slug: {course.slug} &mdash; or
+                to <code>all</code> if one purchase should unlock every course.
               </p>
               {state.fieldErrors?.ghlCheckoutUrl && (
                 <p className="text-destructive text-xs">{state.fieldErrors.ghlCheckoutUrl[0]}</p>

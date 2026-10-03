@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
 import { FileIcon, FileText, ImageIcon, Trash2, Upload, Video } from "lucide-react";
 import {
@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MediaType } from "@/generated/prisma";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import { uploadMediaFile } from "@/features/media/client/upload-media";
 import type { ApiResponse } from "@/lib/errors/api-response";
 
 const TYPE_ICON: Record<MediaType, typeof FileIcon> = {
@@ -57,29 +58,35 @@ export interface MediaLibraryProps {
 export function MediaLibrary({ initialItems }: MediaLibraryProps) {
   const [items, setItems] = useState(initialItems);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleFiles(files: File[]) {
+    if (files.length === 0 || uploading) return;
     setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/media", { method: "POST", body: formData });
-      const json = (await res.json()) as ApiResponse<MediaItem>;
-      if (json.success) {
-        setItems((prev) => [json.data, ...prev]);
-        toast.success("File uploaded.");
-      } else {
-        toast.error(json.error.message);
+    let uploaded = 0;
+    for (const file of files) {
+      try {
+        setProgressLabel(`${file.name} (0%)`);
+        const media = await uploadMediaFile(file, (pct) => setProgressLabel(`${file.name} (${Math.round(pct)}%)`));
+        // The upload response carries no uploader; it is always the current user.
+        setItems((prev) => [{ ...media, user: { name: "You", email: "" } }, ...prev]);
+        uploaded += 1;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Upload failed. Please try again.");
       }
-    } catch {
-      toast.error("Upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
+    if (uploaded > 0) toast.success(`${uploaded} file${uploaded === 1 ? "" : "s"} uploaded.`);
+    setUploading(false);
+    setProgressLabel(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    void handleFiles(Array.from(event.dataTransfer.files));
   }
 
   async function handleDelete(id: string) {
@@ -95,18 +102,36 @@ export function MediaLibrary({ initialItems }: MediaLibraryProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
+      <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed bg-card p-4 transition-colors",
+          dragging && "border-emerald-500 bg-emerald-500/10",
+        )}
+      >
         <div>
           <p className="text-sm font-medium">Upload media</p>
           <p className="text-muted-foreground text-xs">
-            Images, videos and documents used across your courses.
+            {progressLabel ?? "Drag and drop images, videos and documents here, or use the button."}
           </p>
         </div>
         <Button type="button" disabled={uploading} onClick={() => inputRef.current?.click()}>
           <Upload />
-          {uploading ? "Uploading..." : "Upload file"}
+          {uploading ? "Uploading..." : "Upload files"}
         </Button>
-        <input ref={inputRef} type="file" className="hidden" onChange={handleUpload} />
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => void handleFiles(Array.from(e.target.files ?? []))}
+        />
       </div>
 
       {items.length === 0 ? (

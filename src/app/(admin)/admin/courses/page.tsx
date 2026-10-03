@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CourseFiltersBar } from "@/components/admin/course-filters-bar";
 import { CoursesTable } from "@/components/admin/courses-table";
+import { CourseImportDialog } from "@/components/admin/course-import-dialog";
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { listCategories, listCourses } from "@/features/courses/services/course.service";
@@ -52,15 +53,19 @@ export default async function AdminCoursesPage({ searchParams }: AdminCoursesPag
             {user.role === Role.INSTRUCTOR ? " you teach" : " across the platform"}.
           </p>
         </div>
-        <Button render={<Link href="/admin/courses/new" />}>
-          <Plus />
-          New course
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <CourseImportDialog />
+          <Button render={<Link href="/admin/courses/new" />}>
+            <Plus />
+            New course
+          </Button>
+        </div>
       </div>
 
       <CourseFiltersBar categories={categories} defaultValues={{ search, category, level, status }} />
 
-      <CoursesTable initialItems={items} />
+      {/* Keyed by its rows: the table copies them into state, so a refresh after an import must remount it. */}
+      <CoursesTable key={items.map((item) => item.id).join(",")} initialItems={items} />
 
       <AdminPagination
         page={page}

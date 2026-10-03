@@ -5,7 +5,8 @@ const optionalString = z.string().trim().optional();
 /** The key/value pairs configured under "Custom Data" on the GoHighLevel workflow's Webhook action. */
 const ghlCustomDataSchema = z.object({
   secret: optionalString,
-  // One slug, or several separated by commas when a single order sells more than one course.
+  // "all" (or left out) unlocks every course. Otherwise one slug, or several
+  // separated by commas, to sell specific courses.
   course_slug: optionalString,
   email: optionalString,
   name: optionalString,
@@ -52,6 +53,28 @@ export const coursePurchaseSchema = z.object({
 });
 export type CoursePurchase = z.infer<typeof coursePurchaseSchema>;
 
+/**
+ * Marker for "every course on the platform", stored in Payment.courseSlugs
+ * for a purchase that unlocks them all (including ones published later).
+ */
+export const ALL_COURSES = "*";
+
+/**
+ * "a, b" -> ["a", "b"]. The word "all" (or "*") anywhere in the list means
+ * every course. A purchase webhook with no course_slug at all is an
+ * all-courses purchase too; a refund without one falls back to whatever the
+ * refunded payment unlocked.
+ */
+function parseCourseSlugs(raw: string | undefined, { emptyMeansAll }: { emptyMeansAll: boolean }): string[] {
+  const slugs = (raw ?? "")
+    .split(",")
+    .map((slug) => slug.trim().toLowerCase())
+    .filter(Boolean);
+  if (slugs.includes("all") || slugs.includes(ALL_COURSES)) return [ALL_COURSES];
+  if (slugs.length === 0 && emptyMeansAll) return [ALL_COURSES];
+  return slugs;
+}
+
 /** "49.99" / 49.99 -> 4999; anything unparseable is dropped rather than failing the webhook. */
 function toAmountCents(amount: string | number | undefined): number | undefined {
   if (amount === undefined) return undefined;
@@ -69,10 +92,7 @@ export function toCoursePurchase(payload: GhlPurchaseWebhookPayload): CoursePurc
   return coursePurchaseSchema.parse({
     email: custom.email || payload.email,
     name: custom.name || payload.name || fullName || undefined,
-    courseSlugs: (custom.course_slug || payload.course_slug || "")
-      .split(",")
-      .map((slug) => slug.trim().toLowerCase())
-      .filter(Boolean),
+    courseSlugs: parseCourseSlugs(custom.course_slug || payload.course_slug, { emptyMeansAll: true }),
     contactId: payload.contact_id || undefined,
     locationId: payload.location?.id || undefined,
     transactionId: custom.transaction_id || payload.transaction_id || undefined,
@@ -97,10 +117,7 @@ export function toCourseRefund(payload: GhlPurchaseWebhookPayload): CourseRefund
   const custom = payload.customData ?? {};
   return courseRefundSchema.parse({
     email: custom.email || payload.email || undefined,
-    courseSlugs: (custom.course_slug || payload.course_slug || "")
-      .split(",")
-      .map((slug) => slug.trim().toLowerCase())
-      .filter(Boolean),
+    courseSlugs: parseCourseSlugs(custom.course_slug || payload.course_slug, { emptyMeansAll: false }),
     transactionId: custom.transaction_id || payload.transaction_id || undefined,
   });
 }

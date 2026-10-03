@@ -25,7 +25,13 @@ export const ROUTES = {
   adminMedia: "/admin/media",
 } as const;
 
+/** Limit for uploads that pass through the app server (local-disk storage). */
 export const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+
+/** Limit for uploads sent straight from the browser to Vercel Blob (course videos). */
+export const MAX_BLOB_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
+
+export const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v", "video/ogg"];
 
 export const ACCEPTED_DOCUMENT_TYPES = [
   "application/pdf",

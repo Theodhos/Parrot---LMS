@@ -23,7 +23,7 @@ import { ProgressSummary } from "@/components/progress/progress-summary";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { cn, formatDate, formatDuration } from "@/lib/utils";
 import { getPublishedCourseBySlug } from "@/features/courses/services/course.service";
-import { getMyEnrollment } from "@/features/enrollments/services/enrollment.service";
+import { getAccessibleEnrollment } from "@/features/access/services/access.service";
 import { getLearnLessonView } from "@/features/lessons/services/learning.service";
 import {
   getCourseProgress,
@@ -61,7 +61,10 @@ export default async function CourseDetailPage({ params, searchParams }: CourseD
     throw error;
   }
 
-  const enrollment = await getMyEnrollment(user, course.id);
+  // Null for no access (including a revoked purchase); an all-courses buyer
+  // opening a course for the first time is enrolled here and lands straight
+  // in the player.
+  const enrollment = await getAccessibleEnrollment(user, course.id);
   const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.id));
   const buyUrl = course.ghlCheckoutUrl;
 

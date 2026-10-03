@@ -4,7 +4,7 @@ import { ACCEPTED_DOCUMENT_TYPES, ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_SIZE_BYTES } 
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireRole, requireSelfOrAdmin, type SessionUser } from "@/lib/permissions";
 import * as mediaRepo from "@/features/media/repositories/media.repository";
-import { mediaStorage } from "./storage";
+import { isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
 
 function resolveMediaType(mimeType: string): MediaType {
   if (ACCEPTED_IMAGE_TYPES.includes(mimeType)) return MediaType.IMAGE;
@@ -32,6 +32,29 @@ export async function uploadMedia(user: SessionUser, file: File) {
   });
 }
 
+/**
+ * Records a file the browser already uploaded straight to Vercel Blob (see
+ * /api/media/upload). Only a URL inside the Blob service is accepted, so this
+ * cannot be used to register arbitrary external links as platform media.
+ */
+export async function registerUploadedMedia(
+  user: SessionUser,
+  input: { url: string; fileName: string; size: number; contentType: string },
+) {
+  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+  if (!isBlobUrl(input.url)) {
+    throw new ValidationError("Only files uploaded to the platform's storage can be registered");
+  }
+
+  return mediaRepo.createMedia({
+    fileName: input.fileName,
+    fileUrl: input.url,
+    type: resolveMediaType(input.contentType),
+    size: input.size,
+    user: { connect: { id: user.id } },
+  });
+}
+
 export function listMyMedia(user: SessionUser) {
   return mediaRepo.listMediaForUser(user.id);
 }
@@ -47,6 +70,6 @@ export async function deleteMedia(user: SessionUser, id: string) {
   if (!media) throw new NotFoundError("Media");
   requireSelfOrAdmin(user, media.userId);
 
-  await mediaStorage.remove(media.fileUrl);
+  await removeStoredFile(media.fileUrl);
   await mediaRepo.deleteMedia(id);
 }

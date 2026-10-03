@@ -11,13 +11,33 @@ import * as enrollmentRepo from "@/features/enrollments/repositories/enrollment.
 import { createPasswordSetupToken, hasLivePasswordSetupToken } from "@/features/auth/services/activation.service";
 import { GHL_TAGS, type GhlContactRef } from "@/features/access/services/gohighlevel.service";
 import { emailLinkThroughGhl } from "@/features/access/services/ghl-email-handoff";
+import { ALL_COURSES, hasAllCourseAccess } from "@/features/access/services/all-access";
 
 /**
- * Throws ForbiddenError unless the user is enrolled in this course (or
+ * The user's usable enrollment in a course, or null when they have no access.
+ * A REVOKED (refund/chargeback) or DROPPED row grants nothing. A user with no
+ * row at all who holds an all-courses purchase is enrolled on the spot --
+ * that is how a course published after their purchase opens for them without
+ * anyone having to grant it.
+ */
+export async function getAccessibleEnrollment(user: { id: string }, courseId: string) {
+  const enrollment = await enrollmentRepo.findEnrollment(user.id, courseId);
+  if (enrollment) {
+    const blocked = enrollment.status === EnrollmentStatus.REVOKED || enrollment.status === EnrollmentStatus.DROPPED;
+    return blocked ? null : enrollment;
+  }
+  if (await hasAllCourseAccess(user.id)) {
+    return ensureEnrollment(user.id, courseId);
+  }
+  return null;
+}
+
+/**
+ * Throws ForbiddenError unless the user has access to this course (or
  * manages it, for instructor/admin preview). Every protected course/lesson
  * read must go through this -- never trust a client-supplied "I have access"
- * claim; the enrollment row in the database is the only source of truth.
- * A REVOKED (refund/chargeback) or DROPPED enrollment row grants nothing.
+ * claim; the enrollment and payment rows in the database are the only source
+ * of truth.
  */
 export async function requireCourseAccess(
   user: SessionUser,
@@ -25,9 +45,7 @@ export async function requireCourseAccess(
 ): Promise<void> {
   if (canManageCourse(user, course)) return;
 
-  const enrollment = await enrollmentRepo.findEnrollment(user.id, course.id);
-  const blocked = enrollment?.status === EnrollmentStatus.REVOKED || enrollment?.status === EnrollmentStatus.DROPPED;
-  if (!enrollment || blocked) {
+  if (!(await getAccessibleEnrollment(user, course.id))) {
     throw new ForbiddenError("Enroll in this course to access its lessons");
   }
 }
@@ -117,19 +135,27 @@ export async function handleCoursePurchase(
     }
   }
 
+  // An all-courses purchase enrolls into everything published right now;
+  // courses published later open on first visit (see getAccessibleEnrollment).
+  const allCourses = purchase.courseSlugs.includes(ALL_COURSES);
   const courses = await prisma.course.findMany({
-    where: { slug: { in: purchase.courseSlugs }, status: CourseStatus.PUBLISHED },
+    where: {
+      status: CourseStatus.PUBLISHED,
+      ...(allCourses ? {} : { slug: { in: purchase.courseSlugs } }),
+    },
     select: { id: true, slug: true },
   });
-  if (courses.length === 0) {
-    // Fail loudly (GoHighLevel shows the failed webhook in the workflow's
-    // execution log) rather than provisioning an account with no course.
-    throw new ValidationError(`No published course matches slug(s): ${purchase.courseSlugs.join(", ")}`);
-  }
-  const foundSlugs = new Set(courses.map((c) => c.slug));
-  const missing = purchase.courseSlugs.filter((slug) => !foundSlugs.has(slug));
-  if (missing.length > 0) {
-    console.warn(`[webhooks:gohighlevel] purchase: no published course for slug(s) ${missing.join(", ")}`);
+  if (!allCourses) {
+    if (courses.length === 0) {
+      // Fail loudly (GoHighLevel shows the failed webhook in the workflow's
+      // execution log) rather than provisioning an account with no course.
+      throw new ValidationError(`No published course matches slug(s): ${purchase.courseSlugs.join(", ")}`);
+    }
+    const foundSlugs = new Set(courses.map((c) => c.slug));
+    const missing = purchase.courseSlugs.filter((slug) => !foundSlugs.has(slug));
+    if (missing.length > 0) {
+      console.warn(`[webhooks:gohighlevel] purchase: no published course for slug(s) ${missing.join(", ")}`);
+    }
   }
 
   // Find or provision the account. An existing account is never duplicated
@@ -152,10 +178,13 @@ export async function handleCoursePurchase(
 
   // Lifetime access: an ACTIVE enrollment per purchased course, no expiry.
   // ensureEnrollment is idempotent and re-activates a previously REVOKED one.
-  for (const course of courses) {
-    await ensureEnrollment(user.id, course.id);
-  }
-  console.info(`[webhooks:gohighlevel] course access granted: ${courses.map((c) => c.slug).join(", ")} -> ${purchase.email}`);
+  // In parallel: an all-courses purchase can cover dozens of courses, and the
+  // webhook has to answer before GoHighLevel gives up on it.
+  const buyerId = user.id;
+  await Promise.all(courses.map((course) => ensureEnrollment(buyerId, course.id)));
+  console.info(
+    `[webhooks:gohighlevel] course access granted: ${allCourses ? `all courses (${courses.length} published)` : courses.map((c) => c.slug).join(", ")} -> ${purchase.email}`,
+  );
 
   // Written last: this row is both the payment record and the "fully
   // processed" idempotency marker for this transaction.
@@ -169,7 +198,7 @@ export async function handleCoursePurchase(
       amountCents: purchase.amountCents,
       currency: purchase.currency,
       status: PaymentStatus.SUCCEEDED,
-      courseSlugs: courses.map((c) => c.slug),
+      courseSlugs: allCourses ? [ALL_COURSES] : courses.map((c) => c.slug),
       issuedCredentials: needsSetup,
     },
   });
@@ -289,7 +318,12 @@ export async function handleCourseRefund(refund: CourseRefund): Promise<RefundRe
     throw new ValidationError("Refund webhook needs a course_slug or a known transaction_id to know what to revoke");
   }
 
-  const courses = await prisma.course.findMany({ where: { slug: { in: slugs } }, select: { id: true, slug: true } });
+  // Refunding an all-courses purchase takes back every paid course; free
+  // courses were never behind the purchase and stay open.
+  const courses = await prisma.course.findMany({
+    where: slugs.includes(ALL_COURSES) ? { priceCents: { gt: 0 } } : { slug: { in: slugs } },
+    select: { id: true, slug: true },
+  });
   const revoked: string[] = [];
   for (const course of courses) {
     const result = await prisma.enrollment.updateMany({

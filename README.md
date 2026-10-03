@@ -99,7 +99,7 @@ Free courses (price $0) work with no GoHighLevel at all. To sell a paid course:
 5. **Purchase workflow** -- create a workflow per course (this is what grants access — no webhook, no account):
    - Trigger: *Payment Received* (or *Order Submitted*), filtered to that course's product, **successful payments only**.
    - Action *Webhook*: `POST https://<your-domain>/api/webhooks/gohighlevel/purchase`, with Custom Data:
-     - `course_slug` = the course's slug (comma-separate several for a bundle)
+     - `course_slug` = `all` to unlock **every course** with one purchase (also the default when the field is left out), or a specific course's slug (comma-separate several for a bundle). An all-courses buyer is enrolled in everything published at purchase time, and any course published later opens for them the first time they visit it.
      - `secret` = `GHL_WEBHOOK_SECRET` (or send it as an `x-webhook-secret` header instead)
      - `transaction_id` = the payment/order id merge tag (e.g. `{{payment.id}}` / `{{order.id}}`) — **recommended**: it's the idempotency key that makes a redelivered webhook a safe no-op (no duplicate account, access, or email)
      - optionally `payment_status` = `{{payment.status}}` (anything non-successful is rejected), `amount`, `currency`, `product_id` (bookkeeping on the Payment record)
@@ -124,6 +124,19 @@ If the handoff to GoHighLevel fails (API down, token missing), the account and a
 A setup link expires after 48 hours and works once. For a buyer who missed it, re-run the purchase workflow for that contact in GoHighLevel (same `transaction_id`): while a usable link exists the redelivery is a no-op, but once every link has expired unused the app issues a fresh one and re-adds the tag. No password is ever generated, emailed, or stored in plaintext.
 
 The webhook must reach the app over the public internet, so test against a deployed URL (or a tunnel to `localhost:3010`).
+
+Paid courses can only be opened by a verified purchase: self-enrollment (the "Enroll" button, `POST /api/enrollments`) is refused for any course with a price unless the user manages it or holds an all-courses purchase.
+
+### 5. Vercel Blob (needed on Vercel for uploading videos and files)
+
+On Vercel the local disk is read-only and a request body is capped at 4.5 MB, so uploads go straight from the browser to Vercel Blob. In the Vercel dashboard: *Storage -> Create -> Blob*, create a **public** store and connect it to the project (this adds `BLOB_READ_WRITE_TOKEN`), then redeploy. Without it (local development) uploads fall back to `public/uploads`, limited to 25 MB.
+
+Files in a public store are reachable by anyone who has the exact URL. The URLs carry a random suffix and are only handed to users with access to the lesson, but a buyer could copy one and share it -- the usual trade-off of direct video delivery.
+
+## Adding content in bulk
+
+- **Drop files into a module** (`/admin/courses/{id}`, expand a module): drag in any number of videos or documents. Each becomes a lesson named after its file, in file-name order -- a video becomes a VIDEO lesson (its length is read automatically), anything else a DOCUMENT lesson linking to the file. The same uploader backs the Media page.
+- **Import courses from a file** (`/admin/courses` -> *Import courses*): drop a `.csv` (opens in Excel; `,` or `;` separated) or `.json` file. CSV has one row per lesson with the columns `course_title, course_description, level, price, checkout_url, module_title, lesson_title, lesson_type, video_url, duration_seconds, lesson_description`; rows sharing a course and module name are grouped, and course-level columns only need filling on a course's first row. The dialog offers a template, previews what the file contains, and lists any problem by course/module/lesson name before anything is created. Imported courses arrive as drafts.
 
 ## Scripts
 

@@ -133,6 +133,13 @@ On Vercel the local disk is read-only and a request body is capped at 4.5 MB, so
 
 Files in a public store are reachable by anyone who has the exact URL. The URLs carry a random suffix and are only handed to users with access to the lesson, but a buyer could copy one and share it -- the usual trade-off of direct video delivery.
 
+## Community and calendar
+
+Both are stored in MongoDB (`src/features/community`, `src/features/calendar`).
+
+- **Community** (`/community`, and the three buttons on the student dashboard): members post a question, a win, or a video for feedback. A video is uploaded to the platform's own storage (same uploader as course material, limited to video and 300 MB per file; 25 MB without Blob storage) -- a post can never embed an outside link. Members like, celebrate and comment; the author is notified of replies, and replies from an admin or instructor carry a "Coach" badge. A member can hide a post for themselves or report it; staff see the report count and, like the author, can delete the post (its comments and video go with it). Posting is rate-limited per member.
+- **Calendar** (`/calendar`, and "Coming Up" on the dashboard): admins and instructors create events at `/admin/calendar` -- a live call or group session (members RSVP, and only then see the join link), a reminder, or a content release. Times are stored in UTC and shown in each viewer's own time zone; an all-day event is stored at 12:00 UTC of its date so it reads as the same day everywhere. "Add to Calendar" downloads an `.ics` file (`/api/calendar/events/{id}/ics`) or opens Google Calendar. An admin manages every event; an instructor the ones they created.
+
 ## Adding content in bulk
 
 - **Drop files into a module** (`/admin/courses/{id}`, expand a module): drag in any number of videos or documents. Each becomes a lesson named after its file, in file-name order -- a video becomes a VIDEO lesson (its length is read automatically), anything else a DOCUMENT lesson linking to the file.
@@ -169,4 +176,4 @@ Files in a public store are reachable by anyone who has the exact URL. The URLs 
 ## Known gaps / follow-ups
 - The WordPress/WooCommerce bridge is kept in the repo but dormant: `wordpress-plugin/course-platform-bridge/`, `scripts/setup-local-wordpress.sh`, `src/features/auth/services/wordpress-bridge.service.ts` and `src/lib/webhooks/verify-bridge-signature.ts` are not called by anything, and the `/api/webhooks/woocommerce` routes no longer exist. `User.wordpressUserId` is a leftover of it; nothing writes it anymore.
 - Stripe Checkout (`src/features/payments/`, `/api/webhooks/stripe`) is fully built but not linked from any UI button.
-- Community, Calendar, and Support pages (`src/app/(student)/{community,calendar,support}/`) currently use client-side mock data, not persisted to MongoDB.
+- The Support page (`src/app/(student)/support/`) and the "My Bird" card on the dashboard still use client-side sample data.

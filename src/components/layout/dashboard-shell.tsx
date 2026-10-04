@@ -33,9 +33,17 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b bg-background px-4 md:px-8">
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-6">
+        <div className="mx-auto flex h-16 w-full max-w-7xl min-w-0 items-center gap-3 xl:gap-6">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger className="flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:hidden">
+            {/* The student menu sits in the header and only fits from lg up; below that
+                it lives in this drawer. The admin menu is a sidebar that appears at md. */}
+            <SheetTrigger
+              aria-label="Open menu"
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted",
+                variant === "student" ? "lg:hidden" : "md:hidden",
+              )}
+            >
               <Menu className="size-5" />
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-4">
@@ -47,7 +55,7 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
             </SheetContent>
           </Sheet>
 
-          <Link href="/" className="hidden items-center gap-2 text-base font-bold md:flex">
+          <Link href="/" className="hidden shrink-0 items-center gap-2 text-base font-bold md:flex">
             <Bird className="size-8 text-emerald-500" />
             <div className="flex flex-col">
               <span className="font-heading text-lg leading-tight tracking-tight text-[#4d5e54]">PARROT KINDERGARTEN</span>
@@ -56,7 +64,7 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
           </Link>
 
           {variant === "student" && (
-            <nav className="hidden items-center gap-6 md:flex ml-8">
+            <nav className="hidden items-center gap-1 lg:ml-2 lg:flex xl:ml-8 xl:gap-6">
               {navItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
@@ -91,7 +99,9 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
             <SidebarNav items={navItems} />
           </aside>
         )}
-        <main className="flex-1 p-4 md:p-8">
+        {/* min-w-0: as a flex item, main would otherwise grow to fit its widest unbreakable
+            child (a long title, a wide table) and make the whole page scroll sideways. */}
+        <main className="min-w-0 flex-1 p-4 md:p-8">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">{children}</div>
         </main>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, MessageCircleQuestion, MessagesSquare, Trophy, Upload, Users, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,14 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
   const [posting, setPosting] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  // The dashboard's buttons arrive with ?compose=...; once that has opened the
+  // dialog, drop it from the address so a reload or a shared link does not
+  // open the dialog again.
+  useEffect(() => {
+    if (isComposeKind(initialCompose)) router.replace("/community", { scroll: false });
+  }, [initialCompose, router]);
 
   const kindOf = (value: CommunityPostKind | "ALL") => (value === "ALL" ? undefined : value);
 

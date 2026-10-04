@@ -99,7 +99,8 @@ export function EventRow({ event: initialEvent, compact = false, className }: Ev
         className,
       )}
     >
-      <div className={cn("flex items-center gap-4", !compact && "flex-1")}>
+      {/* min-w-0 lets the title truncate instead of pushing the buttons off a narrow screen. */}
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         <div className={cn("flex shrink-0 flex-col items-center justify-center", compact ? "w-12" : "w-14")}>
           <div className="flex h-5 w-full items-center justify-center rounded-t-md bg-[#3B82F6] text-[10px] font-bold text-white">
             {parts?.weekday ?? " "}

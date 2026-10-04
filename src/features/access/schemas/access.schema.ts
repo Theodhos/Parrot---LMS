@@ -5,8 +5,8 @@ const optionalString = z.string().trim().optional();
 /** The key/value pairs configured under "Custom Data" on the GoHighLevel workflow's Webhook action. */
 const ghlCustomDataSchema = z.object({
   secret: optionalString,
-  // "all" (or left out) unlocks every course. Otherwise one slug, or several
-  // separated by commas, to sell specific courses.
+  // Still accepted so existing workflows keep working, but no longer read:
+  // every purchase unlocks every published course.
   course_slug: optionalString,
   email: optionalString,
   name: optionalString,
@@ -42,7 +42,6 @@ export type GhlPurchaseWebhookPayload = z.infer<typeof ghlPurchaseWebhookSchema>
 export const coursePurchaseSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   name: z.string().trim().max(160).optional(),
-  courseSlugs: z.array(z.string().min(1)).min(1),
   contactId: z.string().min(1).optional(),
   locationId: z.string().min(1).optional(),
   transactionId: z.string().min(1).optional(),
@@ -54,26 +53,10 @@ export const coursePurchaseSchema = z.object({
 export type CoursePurchase = z.infer<typeof coursePurchaseSchema>;
 
 /**
- * Marker for "every course on the platform", stored in Payment.courseSlugs
- * for a purchase that unlocks them all (including ones published later).
+ * What Payment.courseSlugs records for a purchase: every purchase unlocks
+ * every published course, including ones published later.
  */
 export const ALL_COURSES = "*";
-
-/**
- * "a, b" -> ["a", "b"]. The word "all" (or "*") anywhere in the list means
- * every course. A purchase webhook with no course_slug at all is an
- * all-courses purchase too; a refund without one falls back to whatever the
- * refunded payment unlocked.
- */
-function parseCourseSlugs(raw: string | undefined, { emptyMeansAll }: { emptyMeansAll: boolean }): string[] {
-  const slugs = (raw ?? "")
-    .split(",")
-    .map((slug) => slug.trim().toLowerCase())
-    .filter(Boolean);
-  if (slugs.includes("all") || slugs.includes(ALL_COURSES)) return [ALL_COURSES];
-  if (slugs.length === 0 && emptyMeansAll) return [ALL_COURSES];
-  return slugs;
-}
 
 /** "49.99" / 49.99 -> 4999; anything unparseable is dropped rather than failing the webhook. */
 function toAmountCents(amount: string | number | undefined): number | undefined {
@@ -92,7 +75,6 @@ export function toCoursePurchase(payload: GhlPurchaseWebhookPayload): CoursePurc
   return coursePurchaseSchema.parse({
     email: custom.email || payload.email,
     name: custom.name || payload.name || fullName || undefined,
-    courseSlugs: parseCourseSlugs(custom.course_slug || payload.course_slug, { emptyMeansAll: true }),
     contactId: payload.contact_id || undefined,
     locationId: payload.location?.id || undefined,
     transactionId: custom.transaction_id || payload.transaction_id || undefined,
@@ -105,9 +87,6 @@ export function toCoursePurchase(payload: GhlPurchaseWebhookPayload): CoursePurc
 
 export const courseRefundSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
-  // May be empty: a refund identified by transactionId revokes exactly the
-  // courses that payment unlocked.
-  courseSlugs: z.array(z.string().min(1)),
   transactionId: z.string().min(1).optional(),
 });
 export type CourseRefund = z.infer<typeof courseRefundSchema>;
@@ -117,7 +96,6 @@ export function toCourseRefund(payload: GhlPurchaseWebhookPayload): CourseRefund
   const custom = payload.customData ?? {};
   return courseRefundSchema.parse({
     email: custom.email || payload.email || undefined,
-    courseSlugs: parseCourseSlugs(custom.course_slug || payload.course_slug, { emptyMeansAll: false }),
     transactionId: custom.transaction_id || payload.transaction_id || undefined,
   });
 }

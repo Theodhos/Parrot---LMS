@@ -222,10 +222,10 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
                 placeholder="https://... (required for paid courses to be purchasable)"
               />
               <p className="text-muted-foreground text-xs">
-                Paste the URL of this course&apos;s GoHighLevel checkout page (funnel order form or
-                payment link). In the GoHighLevel workflow that runs after payment, set the
-                webhook&apos;s <code>course_slug</code> to this course&apos;s slug: {course.slug} &mdash; or
-                to <code>all</code> if one purchase should unlock every course.
+                Paste the URL of your GoHighLevel checkout page (funnel order form or payment
+                link). It is where the &ldquo;Buy&rdquo; button sends visitors who have not
+                purchased yet. Anyone who has purchased through GoHighLevel already has every
+                published course and never sees a price.
               </p>
               {state.fieldErrors?.ghlCheckoutUrl && (
                 <p className="text-destructive text-xs">{state.fieldErrors.ghlCheckoutUrl[0]}</p>

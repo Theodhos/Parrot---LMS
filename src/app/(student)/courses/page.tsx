@@ -6,6 +6,7 @@ import { CourseFilters } from "@/components/courses/course-filters";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { listCourses, listCategories } from "@/features/courses/services/course.service";
 import { listMyEnrollments } from "@/features/enrollments/services/enrollment.service";
+import { hasAllCourseAccess } from "@/features/access/services/all-access";
 import { listCoursesQuerySchema } from "@/features/courses/schemas/course.schema";
 import { cn } from "@/lib/utils";
 import { CourseStatus } from "@/generated/prisma";
@@ -36,10 +37,11 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     pageSize: 5,
   });
 
-  const [{ items, total, page, pageCount }, categories, enrollments] = await Promise.all([
+  const [{ items, total, page, pageCount }, categories, enrollments, unlocked] = await Promise.all([
     listCourses(query),
     listCategories(),
     listMyEnrollments(user),
+    hasAllCourseAccess(user.id),
   ]);
 
   const enrollmentStatusByCourseId = new Map(enrollments.map((e) => [e.courseId, e.status]));
@@ -83,6 +85,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
               course={course}
               enrollmentStatus={enrollmentStatusByCourseId.get(course.id) ?? null}
               progressPercent={progressByCourseId.get(course.id) ?? null}
+              unlocked={unlocked}
             />
           ))}
         </div>

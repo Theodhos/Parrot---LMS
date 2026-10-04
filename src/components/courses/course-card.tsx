@@ -15,15 +15,22 @@ export interface CourseCardProps {
   enrollmentStatus?: EnrollmentStatus | null;
   /** Server-computed course progress (0-100). Only rendered when enrolled. */
   progressPercent?: number | null;
+  /** The viewer is a buyer: every course is already theirs, so no price is shown. */
+  unlocked?: boolean;
 }
 
-export function CourseCard({ course, enrollmentStatus = null, progressPercent = null }: CourseCardProps) {
+export function CourseCard({
+  course,
+  enrollmentStatus = null,
+  progressPercent = null,
+  unlocked = false,
+}: CourseCardProps) {
   const href = `/courses/${course.slug}`;
   const isCompleted = enrollmentStatus === EnrollmentStatus.COMPLETED;
   const isEnrolled = enrollmentStatus !== null;
   const accent = pickAccent(course.id);
 
-  const ctaLabel = isCompleted ? "Review course" : isEnrolled ? "Continue" : "View course";
+  const ctaLabel = isCompleted ? "Review course" : isEnrolled ? "Continue" : unlocked ? "Start course" : "View course";
   const ctaColor = isCompleted
     ? "!bg-emerald-500 hover:!bg-emerald-600"
     : isEnrolled
@@ -61,7 +68,7 @@ export function CourseCard({ course, enrollmentStatus = null, progressPercent = 
           )}
           {!isEnrolled && (
             <Badge className="text-foreground absolute top-2 left-2 border-transparent bg-white/95 font-semibold shadow-sm">
-              {course.priceCents > 0 ? `$${(course.priceCents / 100).toFixed(2)}` : "Free"}
+              {unlocked ? "Included" : course.priceCents > 0 ? `$${(course.priceCents / 100).toFixed(2)}` : "Free"}
             </Badge>
           )}
         </div>

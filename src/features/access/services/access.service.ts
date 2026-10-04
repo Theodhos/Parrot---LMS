@@ -15,10 +15,9 @@ import { ALL_COURSES, hasAllCourseAccess } from "@/features/access/services/all-
 
 /**
  * The user's usable enrollment in a course, or null when they have no access.
- * A REVOKED (refund/chargeback) or DROPPED row grants nothing. A user with no
- * row at all who holds an all-courses purchase is enrolled on the spot --
- * that is how a course published after their purchase opens for them without
- * anyone having to grant it.
+ * A REVOKED (refund/chargeback) or DROPPED row grants nothing. A buyer with
+ * no row at all is enrolled on the spot -- that is how a course published
+ * after their purchase opens for them without anyone having to grant it.
  */
 export async function getAccessibleEnrollment(user: { id: string }, courseId: string) {
   const enrollment = await enrollmentRepo.findEnrollment(user.id, courseId);
@@ -90,8 +89,8 @@ export interface PurchaseResult {
  *
  * Flow: verify payment success -> idempotency check (Payment.ghlTransactionId)
  * -> find-or-create the account by checkout email (a new account has no
- * password yet) -> enroll into every purchased course (lifetime access, no
- * expiry) -> record the Payment row -> hand the buyer's access link to
+ * password yet) -> enroll into every published course (lifetime access, no
+ * expiry; one purchase opens the whole platform) -> record the Payment row -> hand the buyer's access link to
  * GoHighLevel (contact custom field + a trigger tag), whose workflow sends
  * the email. A new buyer gets a single-use /activate link where they choose
  * their own username and password; an account that already has a password
@@ -135,28 +134,12 @@ export async function handleCoursePurchase(
     }
   }
 
-  // An all-courses purchase enrolls into everything published right now;
-  // courses published later open on first visit (see getAccessibleEnrollment).
-  const allCourses = purchase.courseSlugs.includes(ALL_COURSES);
+  // One purchase opens everything: enroll into every course published right
+  // now; courses published later open on first visit (getAccessibleEnrollment).
   const courses = await prisma.course.findMany({
-    where: {
-      status: CourseStatus.PUBLISHED,
-      ...(allCourses ? {} : { slug: { in: purchase.courseSlugs } }),
-    },
+    where: { status: CourseStatus.PUBLISHED },
     select: { id: true, slug: true },
   });
-  if (!allCourses) {
-    if (courses.length === 0) {
-      // Fail loudly (GoHighLevel shows the failed webhook in the workflow's
-      // execution log) rather than provisioning an account with no course.
-      throw new ValidationError(`No published course matches slug(s): ${purchase.courseSlugs.join(", ")}`);
-    }
-    const foundSlugs = new Set(courses.map((c) => c.slug));
-    const missing = purchase.courseSlugs.filter((slug) => !foundSlugs.has(slug));
-    if (missing.length > 0) {
-      console.warn(`[webhooks:gohighlevel] purchase: no published course for slug(s) ${missing.join(", ")}`);
-    }
-  }
 
   // Find or provision the account. An existing account is never duplicated
   // and its password is never touched -- it just gains the new enrollment.
@@ -176,15 +159,13 @@ export async function handleCoursePurchase(
   }
   const needsSetup = !user.password;
 
-  // Lifetime access: an ACTIVE enrollment per purchased course, no expiry.
+  // Lifetime access: an ACTIVE enrollment per course, no expiry.
   // ensureEnrollment is idempotent and re-activates a previously REVOKED one.
-  // In parallel: an all-courses purchase can cover dozens of courses, and the
-  // webhook has to answer before GoHighLevel gives up on it.
+  // In parallel: there can be dozens of courses, and the webhook has to
+  // answer before GoHighLevel gives up on it.
   const buyerId = user.id;
   await Promise.all(courses.map((course) => ensureEnrollment(buyerId, course.id)));
-  console.info(
-    `[webhooks:gohighlevel] course access granted: ${allCourses ? `all courses (${courses.length} published)` : courses.map((c) => c.slug).join(", ")} -> ${purchase.email}`,
-  );
+  console.info(`[webhooks:gohighlevel] access granted to all ${courses.length} published courses -> ${purchase.email}`);
 
   // Written last: this row is both the payment record and the "fully
   // processed" idempotency marker for this transaction.
@@ -198,7 +179,7 @@ export async function handleCoursePurchase(
       amountCents: purchase.amountCents,
       currency: purchase.currency,
       status: PaymentStatus.SUCCEEDED,
-      courseSlugs: allCourses ? [ALL_COURSES] : courses.map((c) => c.slug),
+      courseSlugs: [ALL_COURSES],
       issuedCredentials: needsSetup,
     },
   });
@@ -280,21 +261,22 @@ export interface RefundResult {
 
 /**
  * Handles a verified refund/chargeback webhook: marks the payment REFUNDED
- * and flips the matching enrollments to REVOKED, which requireCourseAccess
- * then rejects with 403. The account itself survives -- only course access
- * goes. Identified by the original transaction id when available, otherwise
- * by buyer email + course slug(s). Never called for transport errors or
- * delays -- only an explicit refund workflow in GoHighLevel reaches this.
+ * and, if that leaves the buyer with no other paid purchase, flips their
+ * enrollments in every paid course to REVOKED -- which requireCourseAccess
+ * then rejects with 403 -- so the platform closes again. A buyer who still
+ * holds another un-refunded purchase keeps everything. Free courses were
+ * never behind a purchase and stay open, and the account itself survives.
+ * Identified by the original transaction id, or by buyer email. Never called
+ * for transport errors or delays -- only an explicit refund workflow in
+ * GoHighLevel reaches this.
  */
 export async function handleCourseRefund(refund: CourseRefund): Promise<RefundResult> {
   let userId: string | null = null;
-  let slugs = refund.courseSlugs;
 
   if (refund.transactionId) {
     const payment = await prisma.payment.findUnique({ where: { ghlTransactionId: refund.transactionId } });
     if (payment) {
       userId = payment.userId;
-      if (slugs.length === 0) slugs = payment.courseSlugs;
       if (payment.status !== PaymentStatus.REFUNDED) {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.REFUNDED } });
       }
@@ -303,7 +285,7 @@ export async function handleCourseRefund(refund: CourseRefund): Promise<RefundRe
 
   if (!userId) {
     if (!refund.email) {
-      throw new ValidationError("Refund webhook needs a transaction_id or an email to identify the buyer");
+      throw new ValidationError("Refund webhook needs a known transaction_id or an email to identify the buyer");
     }
     const user = await prisma.user.findUnique({ where: { email: refund.email }, select: { id: true } });
     if (!user) {
@@ -312,27 +294,34 @@ export async function handleCourseRefund(refund: CourseRefund): Promise<RefundRe
       return { revokedCourseSlugs: [] };
     }
     userId = user.id;
+    // No transaction to single out: a refund named only by email refunds
+    // everything the buyer paid for.
+    await prisma.payment.updateMany({
+      where: { userId, status: PaymentStatus.SUCCEEDED },
+      data: { status: PaymentStatus.REFUNDED },
+    });
   }
 
-  if (slugs.length === 0) {
-    throw new ValidationError("Refund webhook needs a course_slug or a known transaction_id to know what to revoke");
+  if (await hasAllCourseAccess(userId)) {
+    console.info("[webhooks:gohighlevel] refund recorded; the buyer still holds another purchase, access kept");
+    return { revokedCourseSlugs: [] };
   }
 
-  // Refunding an all-courses purchase takes back every paid course; free
-  // courses were never behind the purchase and stay open.
-  const courses = await prisma.course.findMany({
-    where: slugs.includes(ALL_COURSES) ? { priceCents: { gt: 0 } } : { slug: { in: slugs } },
+  const paidCourses = await prisma.course.findMany({
+    where: { priceCents: { gt: 0 } },
     select: { id: true, slug: true },
   });
-  const revoked: string[] = [];
-  for (const course of courses) {
-    const result = await prisma.enrollment.updateMany({
-      where: { userId, courseId: course.id, status: { not: EnrollmentStatus.REVOKED } },
-      data: { status: EnrollmentStatus.REVOKED },
-    });
-    if (result.count > 0) revoked.push(course.slug);
-  }
+  const slugById = new Map(paidCourses.map((c) => [c.id, c.slug]));
+  const toRevoke = await prisma.enrollment.findMany({
+    where: { userId, courseId: { in: [...slugById.keys()] }, status: { not: EnrollmentStatus.REVOKED } },
+    select: { id: true, courseId: true },
+  });
+  await prisma.enrollment.updateMany({
+    where: { id: { in: toRevoke.map((e) => e.id) } },
+    data: { status: EnrollmentStatus.REVOKED },
+  });
 
+  const revoked = toRevoke.map((e) => slugById.get(e.courseId)!);
   console.info(`[webhooks:gohighlevel] access revoked (refund/chargeback): ${revoked.join(", ") || "nothing to revoke"}`);
   return { revokedCourseSlugs: revoked };
 }

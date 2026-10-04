@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { CourseStatus, EmailStatus, EnrollmentStatus, PaymentStatus, Role } from "@/generated/prisma";
 import { ForbiddenError, UnauthorizedError, ValidationError } from "@/lib/errors/app-error";
 import { handleCoursePurchase, handleCourseRefund, requireCourseAccess } from "./access.service";
+import { scopeCourseQueriesTo } from "./purchase-test-support";
 import { activateAccountFromToken } from "@/features/auth/services/activation.service";
 import { verifyCredentials } from "@/features/auth/services/auth.service";
 import type { CoursePurchase } from "@/features/access/schemas/access.schema";
@@ -27,6 +28,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
   let instructorId: string;
   let courseId: string;
   let setupToken: string;
+  let courseScope: ReturnType<typeof scopeCourseQueriesTo>;
   const savedGhlToken = process.env.GHL_API_TOKEN;
 
   // Stand-in for the GoHighLevel API: records every call, never leaves the process.
@@ -36,7 +38,6 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
   const purchase = (overrides: Partial<CoursePurchase> = {}): CoursePurchase => ({
     email: buyerEmail,
     name: "Ghl Buyer",
-    courseSlugs: [courseSlug],
     transactionId: txn,
     paymentStatus: "succeeded",
     contactId: "contact-123",
@@ -74,6 +75,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
       },
     });
     courseId = course.id;
+    courseScope = scopeCourseQueriesTo(() => [courseId]);
   });
 
   beforeEach(() => {
@@ -82,6 +84,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
   });
 
   afterAll(async () => {
+    courseScope.restore();
     vi.unstubAllGlobals();
     if (savedGhlToken === undefined) delete process.env.GHL_API_TOKEN;
     else process.env.GHL_API_TOKEN = savedGhlToken;
@@ -127,7 +130,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     });
     expect(enrollment?.status).toBe(EnrollmentStatus.ACTIVE);
     const payment = await prisma.payment.findUnique({ where: { ghlTransactionId: txn } });
-    expect(payment).toMatchObject({ status: PaymentStatus.SUCCEEDED, issuedCredentials: true });
+    expect(payment).toMatchObject({ status: PaymentStatus.SUCCEEDED, issuedCredentials: true, courseSlugs: ["*"] });
 
     // Field first, then the tag that fires the email workflow -- and the only
     // field written is the link.
@@ -209,7 +212,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("denies course access to an account with no enrollment (403)", async () => {
+  it("denies course access to an account that never purchased (403)", async () => {
     const stranger = await prisma.user.create({
       data: { name: "Stranger", email: `ghl-stranger-${stamp}@test.local`, role: Role.STUDENT },
     });
@@ -225,7 +228,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
   it("revokes access on refund, keeps the account, and a re-purchase restores access with the same credentials", async () => {
     const user = await prisma.user.findUnique({ where: { email: buyerEmail } });
 
-    const refund = await handleCourseRefund({ transactionId: txn, courseSlugs: [] });
+    const refund = await handleCourseRefund({ transactionId: txn });
     expect(refund.revokedCourseSlugs).toEqual([courseSlug]);
 
     const enrollment = await prisma.enrollment.findUnique({

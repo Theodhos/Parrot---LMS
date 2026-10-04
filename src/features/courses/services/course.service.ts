@@ -3,7 +3,9 @@ import { CourseStatus, Role } from "@/generated/prisma";
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireCourseManager, requireRole, type SessionUser } from "@/lib/permissions";
 import { slugify } from "@/lib/utils";
+import { prisma } from "@/lib/db/client";
 import * as courseRepo from "@/features/courses/repositories/course.repository";
+import { removeUploadedMediaFor } from "@/features/media/services/media-cleanup";
 import type { CourseWithRelations } from "@/features/courses/repositories/course.repository";
 import type {
   CreateCourseInput,
@@ -166,7 +168,10 @@ export async function deleteCourse(user: SessionUser, id: string) {
   const existing = await courseRepo.findCourseOwnerInfo(id);
   if (!existing) throw new NotFoundError("Course");
   requireCourseManager(user, existing);
-  return courseRepo.deleteCourse(id);
+  const lessons = await prisma.lesson.findMany({ where: { courseId: id }, select: { videoUrl: true } });
+  const deleted = await courseRepo.deleteCourse(id);
+  await removeUploadedMediaFor(lessons.map((l) => l.videoUrl));
+  return deleted;
 }
 
 export function listCategories() {

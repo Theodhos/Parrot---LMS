@@ -510,8 +510,11 @@ model LearningActivity {
   occurredAt   DateTime     @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  course Course? @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // SetNull, not NoAction: the log outlives the content it points at. Deleting
+  // a course, module or lesson must succeed even after students have been
+  // active in it, and their streak/activity history must survive it.
+  course Course? @relation(fields: [courseId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([userId, occurredAt])
 }

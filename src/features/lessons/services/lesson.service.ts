@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireCourseManager, type SessionUser } from "@/lib/permissions";
 import { slugify } from "@/lib/utils";
 import * as lessonRepo from "@/features/lessons/repositories/lesson.repository";
+import { removeUploadedMediaFor } from "@/features/media/services/media-cleanup";
 import type { CreateLessonInput, UpdateLessonInput } from "@/features/lessons/schemas/lesson.schema";
 
 async function requireManageableModule(user: SessionUser, courseId: string, moduleId: string) {
@@ -75,7 +76,9 @@ export async function deleteLesson(user: SessionUser, courseId: string, moduleId
   await requireManageableModule(user, courseId, moduleId);
   const existing = await lessonRepo.findLessonById(lessonId);
   if (!existing || existing.moduleId !== moduleId) throw new NotFoundError("Lesson");
-  return lessonRepo.deleteLesson(lessonId);
+  const deleted = await lessonRepo.deleteLesson(lessonId);
+  await removeUploadedMediaFor([existing.videoUrl]);
+  return deleted;
 }
 
 export async function reorderLessons(user: SessionUser, courseId: string, moduleId: string, orderedLessonIds: string[]) {

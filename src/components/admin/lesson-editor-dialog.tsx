@@ -85,8 +85,13 @@ export function LessonEditorDialog({
   const [published, setPublished] = useState(false);
 
   useEffect(() => {
+    // A load that finishes after this effect was torn down (the dialog closed,
+    // or a newer load was started) must not touch the form: it would
+    // overwrite whatever has been typed since with the stale server copy.
+    let stale = false;
     async function load() {
       const result = await getLessonForManageAction(courseId, moduleId, lessonId);
+      if (stale) return;
       if (!result.success || !result.lesson) {
         setLoadError(result.error ?? "Failed to load lesson.");
         setLoading(false);
@@ -103,6 +108,7 @@ export function LessonEditorDialog({
 
       if (lesson.type === LessonType.QUIZ) {
         const quizResult = await getQuizForLessonAction(lessonId);
+        if (stale) return;
         if (quizResult.success) setQuiz(quizResult.quiz ?? null);
       }
       setLoading(false);
@@ -110,6 +116,9 @@ export function LessonEditorDialog({
     // Fetching on mount -- the setState calls happen inside load()'s async continuation, not
     // synchronously in the effect body.
     load();
+    return () => {
+      stale = true;
+    };
   }, [courseId, moduleId, lessonId]);
 
   function handleSave() {

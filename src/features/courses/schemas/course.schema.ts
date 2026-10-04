@@ -26,7 +26,10 @@ export const createCourseSchema = z.object({
 });
 export type CreateCourseInput = z.infer<typeof createCourseSchema>;
 
-export const updateCourseSchema = createCourseSchema.partial();
+// The level field is re-declared without its default: zod applies a default
+// even to an optional field, so a plain .partial() would reset the level to
+// BEGINNER on any update that does not mention it.
+export const updateCourseSchema = createCourseSchema.extend({ level: z.enum(CourseLevel) }).partial();
 export type UpdateCourseInput = z.infer<typeof updateCourseSchema>;
 
 export const updateCourseStatusSchema = z.object({

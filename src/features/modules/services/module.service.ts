@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireCourseManager, type SessionUser } from "@/lib/permissions";
 import * as moduleRepo from "@/features/modules/repositories/module.repository";
+import { removeUploadedMediaFor } from "@/features/media/services/media-cleanup";
 import type { CreateModuleInput, UpdateModuleInput } from "@/features/modules/schemas/module.schema";
 
 async function requireManageableCourse(user: SessionUser, courseId: string) {
@@ -43,7 +44,10 @@ export async function deleteModule(user: SessionUser, courseId: string, moduleId
   await requireManageableCourse(user, courseId);
   const existing = await moduleRepo.findModuleById(moduleId);
   if (!existing || existing.courseId !== courseId) throw new NotFoundError("Module");
-  return moduleRepo.deleteModule(moduleId);
+  const lessons = await prisma.lesson.findMany({ where: { moduleId }, select: { videoUrl: true } });
+  const deleted = await moduleRepo.deleteModule(moduleId);
+  await removeUploadedMediaFor(lessons.map((l) => l.videoUrl));
+  return deleted;
 }
 
 export async function reorderModules(user: SessionUser, courseId: string, orderedModuleIds: string[]) {

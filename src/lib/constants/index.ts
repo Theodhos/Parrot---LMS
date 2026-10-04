@@ -30,6 +30,9 @@ export const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
 /** Limit for uploads sent straight from the browser to Vercel Blob (course videos). */
 export const MAX_BLOB_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024 * 1024;
 
+/** Limit for a video a member attaches to a community post. */
+export const MAX_COMMUNITY_VIDEO_BYTES = 300 * 1024 * 1024;
+
 export const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v", "video/ogg"];
 
 export const ACCEPTED_DOCUMENT_TYPES = [

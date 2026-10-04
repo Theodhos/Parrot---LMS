@@ -84,6 +84,24 @@ enum MediaType {
   OTHER
 }
 
+enum CommunityPostKind {
+  QUESTION
+  WIN
+  VIDEO
+}
+
+enum CommunityReactionKind {
+  LIKE
+  CELEBRATE
+}
+
+enum CalendarEventKind {
+  CALL
+  SESSION
+  REMINDER
+  RELEASE
+}
+
 enum ActivityType {
   LESSON_STARTED
   LESSON_COMPLETED
@@ -246,6 +264,14 @@ model User {
   passwordSetupTokens PasswordSetupToken[]
   payments  Payment[]
   emailLogs EmailLog[]
+
+  communityPosts     CommunityPost[]
+  communityComments  CommunityComment[]
+  communityReactions CommunityReaction[]
+  communityReports   CommunityReport[]
+  communityHides     CommunityHide[]
+  calendarEvents     CalendarEvent[]
+  eventRsvps         EventRsvp[]
 
   coursesTaught Course[]         @relation("InstructorCourses")
   enrollments   Enrollment[]
@@ -517,4 +543,123 @@ model LearningActivity {
   lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([userId, occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Community
+// ---------------------------------------------------------------------------
+
+/// A member's post in the community feed: a question, a win, or a video they
+/// want feedback on (videoUrl points at a file in the platform's own storage).
+model CommunityPost {
+  id        String            @id @default(auto()) @map("_id") @db.ObjectId
+  authorId  String            @db.ObjectId
+  kind      CommunityPostKind
+  content   String
+  videoUrl  String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  author    User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  CommunityComment[]
+  reactions CommunityReaction[]
+  reports   CommunityReport[]
+  hides     CommunityHide[]
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+  @@index([authorId])
+}
+
+model CommunityComment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  authorId  String   @db.ObjectId
+  content   String
+  createdAt DateTime @default(now())
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+/// One row per member, post and kind, so a like or celebration can only be
+/// given once and toggling it off deletes the row.
+model CommunityReaction {
+  id     String                @id @default(auto()) @map("_id") @db.ObjectId
+  postId String                @db.ObjectId
+  userId String                @db.ObjectId
+  kind   CommunityReactionKind
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, kind])
+}
+
+/// A member flagging a post for staff to review (staff see the count and can delete the post).
+model CommunityReport {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String   @db.ObjectId
+  reporterId String   @db.ObjectId
+  createdAt  DateTime @default(now())
+
+  post     CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reporter User          @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, reporterId])
+}
+
+/// A post one member chose not to see any more; it stays visible to everyone else.
+model CommunityHide {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  postId String @db.ObjectId
+  userId String @db.ObjectId
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Calendar
+// ---------------------------------------------------------------------------
+
+/// Something on the shared schedule, created by an admin or instructor:
+/// a live call or group session (members RSVP and get the join link), a
+/// reminder, or a content release. Times are stored in UTC and shown in each
+/// viewer's own time zone.
+model CalendarEvent {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  kind        CalendarEventKind @default(CALL)
+  startsAt    DateTime
+  endsAt      DateTime?
+  allDay      Boolean           @default(false)
+  joinUrl     String?
+  createdById String            @db.ObjectId
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  createdBy User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  rsvps     EventRsvp[]
+
+  @@index([startsAt])
+}
+
+model EventRsvp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
 }

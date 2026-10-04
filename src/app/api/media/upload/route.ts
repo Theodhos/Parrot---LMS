@@ -1,44 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { apiSuccess, withApiHandler } from "@/lib/errors/handler";
 import { AppError } from "@/lib/errors/app-error";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { requireRole } from "@/lib/permissions";
-import { Role } from "@/generated/prisma";
-import {
-  ACCEPTED_DOCUMENT_TYPES,
-  ACCEPTED_IMAGE_TYPES,
-  ACCEPTED_VIDEO_TYPES,
-  MAX_BLOB_UPLOAD_SIZE_BYTES,
-  MAX_UPLOAD_SIZE_BYTES,
-} from "@/lib/constants";
 import { isBlobStorageConfigured } from "@/features/media/services/storage";
-
-const ACCEPTED_TYPES = [...ACCEPTED_VIDEO_TYPES, ...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_DOCUMENT_TYPES];
+import { assertMayUpload, parseUploadScope, uploadPolicy } from "@/features/media/services/upload-policy";
 
 /**
- * Tells the uploader where files go on this deployment: straight to Vercel
- * Blob from the browser (large course videos), or through POST /api/media
- * onto local disk when no Blob store is connected (local development).
+ * Tells the uploader where files go on this deployment and what this user
+ * may upload in the requested scope (`?scope=library|community`): straight
+ * to Vercel Blob from the browser, or through POST /api/media onto local
+ * disk when no Blob store is connected (local development).
  */
-export const GET = withApiHandler(async () => {
-  const user = await requireCurrentUser();
-  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+export const GET = withApiHandler(async (req: NextRequest) => {
+  const scope = parseUploadScope(req.nextUrl.searchParams.get("scope"));
+  assertMayUpload(await requireCurrentUser(), scope);
 
   const blob = isBlobStorageConfigured();
-  return apiSuccess({
-    driver: blob ? ("blob" as const) : ("local" as const),
-    maxBytes: blob ? MAX_BLOB_UPLOAD_SIZE_BYTES : MAX_UPLOAD_SIZE_BYTES,
-    acceptedTypes: ACCEPTED_TYPES,
-  });
+  return apiSuccess({ driver: blob ? ("blob" as const) : ("local" as const), ...uploadPolicy(scope, blob) });
 });
 
 /**
  * Token exchange for browser-to-Blob uploads (`upload()` from
- * @vercel/blob/client calls this). The file itself never passes through the
- * app; this only decides who may upload and what. Only admins and
- * instructors get a token, limited to the accepted types and size, and every
- * file gets a random suffix so its URL cannot be guessed from its name.
+ * @vercel/blob/client calls this; the scope travels as its clientPayload).
+ * The file itself never passes through the app; this only decides who may
+ * upload and what. The token is limited to the scope's types and size, and
+ * every file gets a random suffix so its URL cannot be guessed from its name.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -46,12 +33,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     const result = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async () => {
-        const user = await requireCurrentUser();
-        requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        const scope = parseUploadScope(clientPayload);
+        assertMayUpload(await requireCurrentUser(), scope);
+        const policy = uploadPolicy(scope, true);
         return {
-          allowedContentTypes: ACCEPTED_TYPES,
-          maximumSizeInBytes: MAX_BLOB_UPLOAD_SIZE_BYTES,
+          allowedContentTypes: policy.acceptedTypes,
+          maximumSizeInBytes: policy.maxBytes,
           addRandomSuffix: true,
         };
       },

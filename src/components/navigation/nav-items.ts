@@ -20,6 +20,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: "Courses", href: "/admin/courses", icon: FolderCog },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { label: "Calendar", href: "/admin/calendar", icon: Calendar },
 ];
 
 export const BRAND: NavItem = { label: "Parrot LMS", href: "/", icon: GraduationCap };

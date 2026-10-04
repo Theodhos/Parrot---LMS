@@ -11,12 +11,13 @@ const registerSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
   size: z.number().int().min(0).max(MAX_BLOB_UPLOAD_SIZE_BYTES),
   contentType: z.string().max(200),
+  scope: z.enum(["library", "community"]).default("library"),
 });
 
 /** Adds a file the browser just uploaded to Vercel Blob to the media library. */
 export const POST = withApiHandler(async (req: NextRequest) => {
   const user = await requireCurrentUser();
-  const input = await parseJsonBody(registerSchema, req);
-  const media = await registerUploadedMedia(user, input);
+  const { scope, ...input } = await parseJsonBody(registerSchema, req);
+  const media = await registerUploadedMedia(user, input, scope);
   return apiSuccess(media, { status: 201 });
 });

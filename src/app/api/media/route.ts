@@ -2,6 +2,7 @@ import { apiSuccess, withApiHandler } from "@/lib/errors/handler";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { ValidationError } from "@/lib/errors/app-error";
 import { listMyMedia, uploadMedia } from "@/features/media/services/media.service";
+import { parseUploadScope } from "@/features/media/services/upload-policy";
 
 export const GET = withApiHandler(async () => {
   const user = await requireCurrentUser();
@@ -16,6 +17,6 @@ export const POST = withApiHandler(async (req: Request) => {
   if (!(file instanceof File)) {
     throw new ValidationError("A file field is required");
   }
-  const media = await uploadMedia(user, file);
+  const media = await uploadMedia(user, file, parseUploadScope(formData.get("scope")));
   return apiSuccess(media, { status: 201 });
 });

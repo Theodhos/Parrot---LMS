@@ -1,10 +1,11 @@
 import "server-only";
 import { MediaType, Role } from "@/generated/prisma";
-import { ACCEPTED_DOCUMENT_TYPES, ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_SIZE_BYTES } from "@/lib/constants";
+import { ACCEPTED_DOCUMENT_TYPES, ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireRole, requireSelfOrAdmin, type SessionUser } from "@/lib/permissions";
 import * as mediaRepo from "@/features/media/repositories/media.repository";
-import { isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
+import { isBlobStorageConfigured, isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
+import { assertFileAllowed, assertMayUpload, uploadPolicy, type UploadScope } from "./upload-policy";
 
 function resolveMediaType(mimeType: string): MediaType {
   if (ACCEPTED_IMAGE_TYPES.includes(mimeType)) return MediaType.IMAGE;
@@ -13,12 +14,10 @@ function resolveMediaType(mimeType: string): MediaType {
   return MediaType.OTHER;
 }
 
-export async function uploadMedia(user: SessionUser, file: File) {
-  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
-
-  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-    throw new ValidationError(`File exceeds the ${MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)}MB limit`);
-  }
+/** Stores a file that was posted through the app server (the local-disk path, used without Blob storage). */
+export async function uploadMedia(user: SessionUser, file: File, scope: UploadScope = "library") {
+  assertMayUpload(user, scope);
+  assertFileAllowed(file, uploadPolicy(scope, false));
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const stored = await mediaStorage.save(file.name, buffer);
@@ -40,8 +39,10 @@ export async function uploadMedia(user: SessionUser, file: File) {
 export async function registerUploadedMedia(
   user: SessionUser,
   input: { url: string; fileName: string; size: number; contentType: string },
+  scope: UploadScope = "library",
 ) {
-  requireRole(user, Role.ADMIN, Role.INSTRUCTOR);
+  assertMayUpload(user, scope);
+  assertFileAllowed({ type: input.contentType, size: input.size }, uploadPolicy(scope, isBlobStorageConfigured()));
   if (!isBlobUrl(input.url)) {
     throw new ValidationError("Only files uploaded to the platform's storage can be registered");
   }

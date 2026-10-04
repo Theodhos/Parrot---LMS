@@ -2,7 +2,9 @@ import { requireCurrentUser } from "@/lib/auth/session";
 import { listMyEnrollments } from "@/features/enrollments/services/enrollment.service";
 import { getStudentAnalytics } from "@/features/analytics/services/student-analytics.service";
 import { getLessonProgress } from "@/features/progress/services/progress.service";
-import { EnrollmentStatus } from "@/generated/prisma";
+import { listPosts } from "@/features/community/services/community.service";
+import { listUpcomingEvents } from "@/features/calendar/services/calendar.service";
+import { CommunityPostKind, EnrollmentStatus } from "@/generated/prisma";
 import type { SessionUser } from "@/lib/permissions";
 import { TodaysLessonCard } from "@/components/dashboard/todays-lesson-card";
 import { KeepGoingCard } from "@/components/dashboard/keep-going-card";
@@ -54,7 +56,12 @@ export default async function DashboardPage() {
   const user = await requireCurrentUser();
   const firstName = user.name.split(" ")[0];
 
-  const [enrollments, analytics] = await Promise.all([listMyEnrollments(user), getStudentAnalytics(user)]);
+  const [enrollments, analytics, wins, upcomingEvents] = await Promise.all([
+    listMyEnrollments(user),
+    getStudentAnalytics(user),
+    listPosts(user, { kind: CommunityPostKind.WIN, limit: 2 }),
+    listUpcomingEvents(user, { limit: 3 }),
+  ]);
 
   const activeEnrollments = enrollments.filter((e) => e.status === EnrollmentStatus.ACTIVE).slice(0, 2);
   const allCompleted = enrollments.length > 0 && enrollments.every((e) => e.status === EnrollmentStatus.COMPLETED);
@@ -146,7 +153,8 @@ export default async function DashboardPage() {
 
           {/* Bottom Row: Community Wins */}
           <div className="flex-1">
-            <CommunityWinsCard />
+            {/* Keyed by its posts: the card copies them into state, so a refresh must re-seed it. */}
+            <CommunityWinsCard key={wins.posts.map((p) => p.id).join(",")} posts={wins.posts} />
           </div>
         </div>
 
@@ -161,7 +169,7 @@ export default async function DashboardPage() {
             nextGoal="Use 5 New Words"
             imageUrl="https://images.unsplash.com/photo-1452570053594-1b985d6ea890?q=80&w=150&auto=format&fit=crop"
           />
-          <ThisWeekCard />
+          <ThisWeekCard events={upcomingEvents} />
         </div>
       </div>
 

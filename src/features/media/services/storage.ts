@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { del } from "@vercel/blob";
+import { ValidationError } from "@/lib/errors/app-error";
 
 export interface StoredFile {
   url: string;
@@ -49,6 +50,19 @@ export const mediaStorage: MediaStorage = new LocalDiskStorage();
  */
 export function isBlobStorageConfigured(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+/**
+ * Throws a readable error when this deployment has nowhere to put a file:
+ * on Vercel the disk is read-only, so without a connected Blob store every
+ * upload would otherwise die with an unexplained 500.
+ */
+export function assertStorageReady(): void {
+  if (process.env.VERCEL && !isBlobStorageConfigured()) {
+    throw new ValidationError(
+      "Uploads are not available yet: no file storage is connected to this site. An admin needs to connect a Vercel Blob store to the project and redeploy.",
+    );
+  }
 }
 
 /** Vercel Blob serves every store from a subdomain of this host. */

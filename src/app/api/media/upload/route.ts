@@ -3,7 +3,7 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { apiSuccess, withApiHandler } from "@/lib/errors/handler";
 import { AppError } from "@/lib/errors/app-error";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { isBlobStorageConfigured } from "@/features/media/services/storage";
+import { assertStorageReady, isBlobStorageConfigured } from "@/features/media/services/storage";
 import { assertMayUpload, parseUploadScope, uploadPolicy } from "@/features/media/services/upload-policy";
 
 /**
@@ -15,6 +15,8 @@ import { assertMayUpload, parseUploadScope, uploadPolicy } from "@/features/medi
 export const GET = withApiHandler(async (req: NextRequest) => {
   const scope = parseUploadScope(req.nextUrl.searchParams.get("scope"));
   assertMayUpload(await requireCurrentUser(), scope);
+  // Fail here, before the member picks a file, rather than after they wait for an upload.
+  assertStorageReady();
 
   const blob = isBlobStorageConfigured();
   return apiSuccess({ driver: blob ? ("blob" as const) : ("local" as const), ...uploadPolicy(scope, blob) });

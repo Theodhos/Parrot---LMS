@@ -4,7 +4,7 @@ import { ACCEPTED_DOCUMENT_TYPES, ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireRole, requireSelfOrAdmin, type SessionUser } from "@/lib/permissions";
 import * as mediaRepo from "@/features/media/repositories/media.repository";
-import { isBlobStorageConfigured, isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
+import { assertStorageReady, isBlobStorageConfigured, isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
 import { assertFileAllowed, assertMayUpload, uploadPolicy, type UploadScope } from "./upload-policy";
 
 function resolveMediaType(mimeType: string): MediaType {
@@ -18,6 +18,7 @@ function resolveMediaType(mimeType: string): MediaType {
 export async function uploadMedia(user: SessionUser, file: File, scope: UploadScope = "library") {
   assertMayUpload(user, scope);
   assertFileAllowed(file, uploadPolicy(scope, false));
+  assertStorageReady();
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const stored = await mediaStorage.save(file.name, buffer);

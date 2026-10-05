@@ -50,7 +50,14 @@ export default async function CourseEditorPage({ params }: CourseEditorPageProps
           </BreadcrumbList>
         </Breadcrumb>
         <div className="flex items-center gap-2">
-          <ChevronLeft className="text-muted-foreground size-4" />
+          <Link
+            href="/admin/courses"
+            aria-label="Back to courses"
+            title="Back to courses"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground -ml-1.5 flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ChevronLeft className="size-5" />
+          </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{course.title}</h1>
         </div>
       </div>

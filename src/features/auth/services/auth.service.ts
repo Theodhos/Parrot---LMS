@@ -9,10 +9,11 @@ const PASSWORD_HASH_ROUNDS = 10;
 
 /**
  * Creates a brand-new local account. The first account ever created has no
- * special treatment here -- every self-service signup is a STUDENT; an
- * admin promotes INSTRUCTOR/ADMIN afterward from the admin panel.
+ * special treatment here -- every self-service signup is a STUDENT. The role
+ * is never taken from a request: only an admin adding an instructor from the
+ * admin panel (see user.service createInstructor) passes anything else.
  */
-export async function registerUser(input: RegisterInput) {
+export async function registerUser(input: RegisterInput, role: Role = Role.STUDENT) {
   const data = registerSchema.parse(input);
   const email = data.email.toLowerCase();
 
@@ -27,7 +28,7 @@ export async function registerUser(input: RegisterInput) {
       name: data.name,
       email,
       password: passwordHash,
-      role: Role.STUDENT,
+      role,
     },
   });
 

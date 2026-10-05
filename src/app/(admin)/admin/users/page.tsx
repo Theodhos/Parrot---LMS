@@ -1,3 +1,4 @@
+import { AddInstructorDialog } from "@/components/admin/add-instructor-dialog";
 import { UserFiltersBar } from "@/components/admin/user-filters-bar";
 import { UsersTable } from "@/components/admin/users-table";
 import { AdminPagination } from "@/components/admin/admin-pagination";
@@ -33,11 +34,14 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-        <p className="text-muted-foreground text-sm">
-          {total} user{total === 1 ? "" : "s"} {isAdmin ? "across the platform" : "enrolled in your courses"}.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+          <p className="text-muted-foreground text-sm">
+            {total} user{total === 1 ? "" : "s"} {isAdmin ? "across the platform" : "enrolled in your courses"}.
+          </p>
+        </div>
+        {isAdmin && <AddInstructorDialog />}
       </div>
 
       <UserFiltersBar defaultValues={{ search, role }} showRoleFilter={isAdmin} />

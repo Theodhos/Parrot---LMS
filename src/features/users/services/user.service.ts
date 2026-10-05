@@ -3,7 +3,12 @@ import { Role } from "@/generated/prisma";
 import { NotFoundError } from "@/lib/errors/app-error";
 import { requireRole, type SessionUser } from "@/lib/permissions";
 import * as userRepo from "@/features/users/repositories/user.repository";
-import type { ListUsersQuery, UpdateProfileInput } from "@/features/users/schemas/user.schema";
+import { registerUser } from "@/features/auth/services/auth.service";
+import type {
+  CreateInstructorInput,
+  ListUsersQuery,
+  UpdateProfileInput,
+} from "@/features/users/schemas/user.schema";
 
 export async function getProfile(user: SessionUser) {
   const record = await userRepo.findUserById(user.id);
@@ -30,6 +35,15 @@ export async function listUsers(user: SessionUser, query: ListUsersQuery) {
     ...(user.role === Role.INSTRUCTOR ? { enrolledWithInstructorId: user.id } : {}),
   });
   return { items: users, total, page: query.page, pageSize: query.pageSize, pageCount: Math.ceil(total / query.pageSize) };
+}
+
+/**
+ * Instructors never sign up on their own: an admin adds each one here and
+ * hands them the email and password to log in with.
+ */
+export async function createInstructor(admin: SessionUser, input: CreateInstructorInput) {
+  requireRole(admin, Role.ADMIN);
+  return registerUser(input, Role.INSTRUCTOR);
 }
 
 export async function updateUserRole(admin: SessionUser, userId: string, role: Role) {

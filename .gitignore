@@ -58,3 +58,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# local database dumps (personal data -- never commit)
+/backups/

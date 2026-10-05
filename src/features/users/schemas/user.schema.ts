@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Role } from "@/generated/prisma";
+import { registerSchema } from "@/features/auth/schemas/auth.schema";
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
@@ -12,6 +13,10 @@ export const updateUserRoleSchema = z.object({
   role: z.enum(Role),
 });
 export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
+
+/** An instructor account an admin adds from the admin panel: same rules as any local account. */
+export const createInstructorSchema = registerSchema;
+export type CreateInstructorInput = z.infer<typeof createInstructorSchema>;
 
 export const listUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
@@ -10,7 +11,6 @@ import { UserMenu, type UserMenuProps } from "@/components/layout/user-menu";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
 import { ADMIN_NAV_ITEMS, STUDENT_NAV_ITEMS } from "@/components/navigation/nav-items";
 import { cn } from "@/lib/utils";
-import { Bird } from "lucide-react";
 
 export interface DashboardShellProps {
   /**
@@ -47,20 +47,22 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
               <Menu className="size-5" />
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-4">
-              <Link href="/" className="mb-6 flex items-center gap-2 text-base font-semibold">
-                <Bird className="size-6 text-emerald-500" />
-                <span className="font-heading tracking-tight">PARROT KINDERGARTEN</span>
+              <Link href="/" className="mb-6 flex items-center pr-8">
+                <Image src="/logo.png" alt="Parrot Kindergarten — Stop Guessing, Start Talking!" width={600} height={95} className="h-auto w-full" />
               </Link>
               <SidebarNav items={navItems} onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
 
-          <Link href="/" className="hidden shrink-0 items-center gap-2 text-base font-bold md:flex">
-            <Bird className="size-8 text-emerald-500" />
-            <div className="flex flex-col">
-              <span className="font-heading text-lg leading-tight tracking-tight text-[#4d5e54]">PARROT KINDERGARTEN</span>
-              <span className="text-[13px] text-[#718076] font-medium tracking-normal italic mt-[-2px]">Stop Guessing, Start Talking!</span>
-            </div>
+          <Link href="/" className="flex shrink-0 items-center">
+            <Image
+              src="/logo.png"
+              alt="Parrot Kindergarten — Stop Guessing, Start Talking!"
+              width={600}
+              height={95}
+              preload
+              className="h-6 w-auto sm:h-7 md:h-9"
+            />
           </Link>
 
           {variant === "student" && (

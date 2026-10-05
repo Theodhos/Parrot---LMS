@@ -1,25 +1,19 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { Bird, CalendarDays, Play, Users } from "lucide-react";
+import { CalendarDays, Play, Users } from "lucide-react";
 
 function BrandLockup({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span
-        className={`flex shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm ${compact ? "size-10" : "size-12"}`}
-      >
-        <Bird className={compact ? "size-6" : "size-7"} />
-      </span>
-      <span className="flex flex-col">
-        <span
-          className={`font-heading leading-tight font-bold tracking-tight text-[#4d5e54] ${compact ? "text-base" : "text-xl"}`}
-        >
-          PARROT KINDERGARTEN
-        </span>
-        <span className={`font-medium text-[#718076] italic ${compact ? "text-xs" : "text-sm"}`}>
-          Stop Guessing, Start Talking!
-        </span>
-      </span>
+    <Link href="/" className="flex items-center">
+      <Image
+        src="/logo.png"
+        alt="Parrot Kindergarten — Stop Guessing, Start Talking!"
+        width={600}
+        height={95}
+        preload
+        className={`h-auto max-w-full ${compact ? "w-64" : "w-80 xl:w-96"}`}
+      />
     </Link>
   );
 }

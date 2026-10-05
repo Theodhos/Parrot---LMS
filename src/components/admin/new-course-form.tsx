@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CategorySelect } from "@/components/admin/category-select";
 import { createCourseAction, type CourseFormState } from "@/features/courses/actions/course.actions";
 import { CourseLevel } from "@/generated/prisma";
 
@@ -22,9 +23,10 @@ const initialState: CourseFormState = { error: null, success: false };
 
 export interface NewCourseFormProps {
   categories: { id: string; name: string }[];
+  canAddCategories?: boolean;
 }
 
-export function NewCourseForm({ categories }: NewCourseFormProps) {
+export function NewCourseForm({ categories, canAddCategories = false }: NewCourseFormProps) {
   const [state, formAction, pending] = useActionState(createCourseAction, initialState);
 
   return (
@@ -59,15 +61,7 @@ export function NewCourseForm({ categories }: NewCourseFormProps) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="categoryId">Category</Label>
-          <select id="categoryId" name="categoryId" defaultValue="" className={selectClassName}>
-            <option value="">No category</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          <CategorySelect categories={categories} canManage={canAddCategories} />
           {state.fieldErrors?.categoryId && (
             <p className="text-destructive text-xs">{state.fieldErrors.categoryId[0]}</p>
           )}

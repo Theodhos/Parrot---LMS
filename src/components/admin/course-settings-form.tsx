@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { CategorySelect } from "@/components/admin/category-select";
 import { DeleteCourseButton } from "@/components/admin/delete-course-button";
 import {
   updateCourseAction,
@@ -61,9 +62,10 @@ const initialState: CourseFormState = { error: null, success: false };
 export interface CourseSettingsFormProps {
   course: CourseDetailDTO;
   categories: { id: string; name: string }[];
+  canAddCategories?: boolean;
 }
 
-export function CourseSettingsForm({ course, categories }: CourseSettingsFormProps) {
+export function CourseSettingsForm({ course, categories, canAddCategories = false }: CourseSettingsFormProps) {
   const router = useRouter();
   const boundAction = updateCourseAction.bind(null, course.id);
   const [state, formAction, pending] = useActionState(boundAction, initialState);
@@ -157,17 +159,11 @@ export function CourseSettingsForm({ course, categories }: CourseSettingsFormPro
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="categoryId">Category</Label>
-                <select id="categoryId" name="categoryId" defaultValue={currentCategoryId} className={selectClassName}>
-                  <option value="">No category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <CategorySelect
+                categories={categories}
+                defaultValue={currentCategoryId}
+                canManage={canAddCategories}
+              />
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="level">Level</Label>

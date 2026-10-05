@@ -14,6 +14,7 @@ import { CourseTreeEditor } from "@/components/admin/course-tree-editor";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { ForbiddenError, NotFoundError } from "@/lib/errors/app-error";
 import { getManageableCourseById, listCategories } from "@/features/courses/services/course.service";
+import { Role } from "@/generated/prisma";
 
 interface CourseEditorPageProps {
   params: Promise<{ courseId: string }>;
@@ -54,7 +55,7 @@ export default async function CourseEditorPage({ params }: CourseEditorPageProps
         </div>
       </div>
 
-      <CourseSettingsForm course={course} categories={categories} />
+      <CourseSettingsForm course={course} categories={categories} canAddCategories={user.role === Role.ADMIN} />
 
       <CourseTreeEditor courseId={course.id} initialModules={course.modules} />
     </div>

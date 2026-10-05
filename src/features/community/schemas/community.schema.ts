@@ -30,6 +30,8 @@ export type ListPostsInput = z.input<typeof listPostsSchema>;
 
 export const createCommentSchema = z.object({
   postId: objectId,
+  /** The comment being answered, when this is a reply to another member rather than to the post. */
+  parentId: objectId.optional(),
   content: z.string().trim().min(1, "Write a comment first").max(1000, "Keep it under 1000 characters"),
 });
 

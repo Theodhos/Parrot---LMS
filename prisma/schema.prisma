@@ -575,6 +575,10 @@ model CommunityComment {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   postId    String   @db.ObjectId
   authorId  String   @db.ObjectId
+  // Set on a reply: the top-level comment it answers. Threads are one level
+  // deep (a reply to a reply joins the same thread). Deliberately not a
+  // relation -- community.service deletes a comment's replies with it.
+  parentId  String?  @db.ObjectId
   content   String
   createdAt DateTime @default(now())
 

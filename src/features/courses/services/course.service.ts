@@ -1,6 +1,6 @@
 import "server-only";
 import { CourseStatus, Role } from "@/generated/prisma";
-import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireCourseManager, requireRole, type SessionUser } from "@/lib/permissions";
 import { slugify } from "@/lib/utils";
 import { prisma } from "@/lib/db/client";
@@ -8,6 +8,7 @@ import * as courseRepo from "@/features/courses/repositories/course.repository";
 import { removeUploadedMediaFor } from "@/features/media/services/media-cleanup";
 import type { CourseWithRelations } from "@/features/courses/repositories/course.repository";
 import type {
+  CreateCategoryInput,
   CreateCourseInput,
   ListCoursesQuery,
   UpdateCourseInput,
@@ -176,4 +177,33 @@ export async function deleteCourse(user: SessionUser, id: string) {
 
 export function listCategories() {
   return courseRepo.listCategories();
+}
+
+/** Categories are the admin's to define; instructors only pick from them. */
+export async function createCategory(user: SessionUser, input: CreateCategoryInput) {
+  requireRole(user, Role.ADMIN);
+  const slug = slugify(input.name);
+  if (!slug) throw new ValidationError("Enter a category name with letters or numbers");
+  if (await courseRepo.findCategoryBySlug(slug)) {
+    throw new ConflictError("A category with this name already exists");
+  }
+  return courseRepo.createCategory({ name: input.name, slug });
+}
+
+export async function renameCategory(user: SessionUser, id: string, input: CreateCategoryInput) {
+  requireRole(user, Role.ADMIN);
+  if (!(await courseRepo.findCategoryById(id))) throw new NotFoundError("Category");
+  const slug = slugify(input.name);
+  if (!slug) throw new ValidationError("Enter a category name with letters or numbers");
+  const sameSlug = await courseRepo.findCategoryBySlug(slug);
+  if (sameSlug && sameSlug.id !== id) {
+    throw new ConflictError("A category with this name already exists");
+  }
+  return courseRepo.updateCategory(id, { name: input.name, slug });
+}
+
+export async function deleteCategory(user: SessionUser, id: string) {
+  requireRole(user, Role.ADMIN);
+  if (!(await courseRepo.findCategoryById(id))) throw new NotFoundError("Category");
+  await courseRepo.deleteCategory(id);
 }

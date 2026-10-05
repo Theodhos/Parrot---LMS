@@ -33,6 +33,8 @@ export interface CommunityPostDTO {
 export interface CommunityCommentDTO {
   id: string;
   postId: string;
+  /** The top-level comment this one replies to; null for a comment on the post itself. */
+  parentId: string | null;
   content: string;
   createdAt: string;
   author: CommunityAuthorDTO;

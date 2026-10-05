@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   EyeOff,
@@ -10,10 +10,12 @@ import {
   MessageCircleQuestion,
   MoreHorizontal,
   PartyPopper,
+  Reply,
   Send,
   Trash2,
   Trophy,
   Video,
+  X,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -91,6 +93,52 @@ function TimeAgo({ iso }: { iso: string }) {
   return <span className="text-muted-foreground text-xs">{mounted ? formatRelativeTime(iso) : " "}</span>;
 }
 
+interface CommentItemProps {
+  comment: CommunityCommentDTO;
+  disabled: boolean;
+  onReply: (comment: CommunityCommentDTO) => void;
+  onDelete: (commentId: string) => void;
+}
+
+function CommentItem({ comment, disabled, onReply, onDelete }: CommentItemProps) {
+  return (
+    <div className="flex gap-3">
+      <AuthorAvatar author={comment.author} className={comment.parentId ? "size-7" : "size-8"} />
+      <div className="min-w-0 flex-1">
+        <div className="rounded-2xl bg-gray-50 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-semibold text-[#1F2937]">{comment.author.name}</span>
+              {comment.author.isStaff && <CoachBadge />}
+              <TimeAgo iso={comment.createdAt} />
+            </div>
+            {comment.canDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(comment.id)}
+                disabled={disabled}
+                className="text-gray-400 hover:text-[#FF5757]"
+                aria-label="Delete comment"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <p className="text-sm break-words whitespace-pre-line text-[#4B5563]">{comment.content}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onReply(comment)}
+          className="mt-1 ml-3 flex items-center gap-1 text-xs font-semibold text-gray-500 transition-colors hover:text-blue-500"
+        >
+          <Reply className="size-3.5" />
+          Reply
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export interface PostCardProps {
   post: CommunityPostDTO;
   /** Called after the post is deleted or hidden, so the list can drop it. */
@@ -100,7 +148,8 @@ export interface PostCardProps {
 
 /**
  * One community post with everything a member can do to it: like, celebrate,
- * read and write comments, report, hide, and (author or staff) delete.
+ * read and write comments, reply to another member's comment, report, hide,
+ * and (author or staff) delete.
  * Reactions update at once and are corrected from the server's answer.
  */
 export function PostCard({ post, onRemoved, className }: PostCardProps) {
@@ -114,6 +163,8 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
   const [comments, setComments] = useState<CommunityCommentDTO[] | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<CommunityCommentDTO | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [reported, setReported] = useState(post.reportedByMe);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -150,8 +201,11 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
     if (next && comments === null) {
       startTransition(async () => {
         const result = await listCommentsAction(post.id);
-        if (result.success) setComments(result.data);
-        else toast.error(result.error);
+        if (result.success) {
+          setComments(result.data);
+          // Others may have replied since the feed was loaded.
+          setCommentCount((n) => Math.max(n, result.data.length));
+        } else toast.error(result.error);
       });
     }
   }
@@ -161,7 +215,7 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
     const content = draft.trim();
     if (!content) return;
     startTransition(async () => {
-      const result = await addCommentAction(post.id, content);
+      const result = await addCommentAction(post.id, content, replyTo?.id);
       if (!result.success) {
         toast.error(result.error);
         return;
@@ -169,7 +223,13 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
       setComments((prev) => [...(prev ?? []), result.data]);
       setCommentCount((n) => n + 1);
       setDraft("");
+      setReplyTo(null);
     });
+  }
+
+  function startReply(comment: CommunityCommentDTO) {
+    setReplyTo(comment);
+    composerRef.current?.focus();
   }
 
   function removeComment(commentId: string) {
@@ -179,10 +239,19 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
         toast.error(result.error);
         return;
       }
-      setComments((prev) => (prev ?? []).filter((c) => c.id !== commentId));
-      setCommentCount((n) => Math.max(0, n - 1));
+      // A comment takes its replies with it.
+      const gone = (c: CommunityCommentDTO) => c.id === commentId || c.parentId === commentId;
+      const removed = (comments ?? []).filter(gone).length || 1;
+      setComments((prev) => (prev ?? []).filter((c) => !gone(c)));
+      setCommentCount((n) => Math.max(0, n - removed));
+      if (replyTo && gone(replyTo)) setReplyTo(null);
     });
   }
+
+  // Replies sit under the comment they answer; one whose parent is not loaded is shown on its own.
+  const loadedIds = new Set((comments ?? []).map((c) => c.id));
+  const threads = (comments ?? []).filter((c) => !c.parentId || !loadedIds.has(c.parentId));
+  const repliesTo = (commentId: string) => (comments ?? []).filter((c) => c.parentId === commentId);
 
   function report() {
     startTransition(async () => {
@@ -302,7 +371,8 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
             aria-label="Comments"
             className={cn("flex items-center gap-1.5 transition-colors hover:text-blue-500", commentsOpen && "text-blue-500")}
           >
-            <MessageCircle className="size-4" /> {commentCount}
+            <MessageCircle className="size-4" />
+            {commentCount === 0 ? "Reply" : `${commentCount} ${commentCount === 1 ? "reply" : "replies"}`}
           </button>
           <button
             type="button"
@@ -322,36 +392,40 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
             ) : comments.length === 0 ? (
               <p className="text-muted-foreground text-xs">No comments yet. Be the first to reply.</p>
             ) : (
-              comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3">
-                  <AuthorAvatar author={comment.author} className="size-8" />
-                  <div className="min-w-0 flex-1 rounded-2xl bg-gray-50 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-[#1F2937]">{comment.author.name}</span>
-                        {comment.author.isStaff && <CoachBadge />}
-                        <TimeAgo iso={comment.createdAt} />
-                      </div>
-                      {comment.canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => removeComment(comment.id)}
+              threads.map((comment) => (
+                <div key={comment.id} className="flex flex-col gap-2">
+                  <CommentItem comment={comment} disabled={pending} onReply={startReply} onDelete={removeComment} />
+                  {repliesTo(comment.id).length > 0 && (
+                    <div className="ml-4 flex flex-col gap-2 border-l-2 border-gray-100 pl-3 sm:ml-11">
+                      {repliesTo(comment.id).map((reply) => (
+                        <CommentItem
+                          key={reply.id}
+                          comment={reply}
                           disabled={pending}
-                          className="text-gray-400 hover:text-[#FF5757]"
-                          aria-label="Delete comment"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
+                          onReply={startReply}
+                          onDelete={removeComment}
+                        />
+                      ))}
                     </div>
-                    <p className="text-sm break-words whitespace-pre-line text-[#4B5563]">{comment.content}</p>
-                  </div>
+                  )}
                 </div>
               ))
             )}
 
+            {replyTo && (
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+                <span className="min-w-0 truncate">
+                  Replying to <span className="font-bold">{replyTo.author.name}</span>
+                </span>
+                <button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply" className="shrink-0 hover:text-blue-900">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+
             <form onSubmit={submitComment} className="flex items-end gap-2">
               <Textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -359,7 +433,7 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
                 }}
                 rows={1}
                 maxLength={1000}
-                placeholder="Write a comment..."
+                placeholder={replyTo ? `Reply to ${replyTo.author.name}...` : "Write a reply..."}
                 className="min-h-9 flex-1 resize-none"
               />
               <button

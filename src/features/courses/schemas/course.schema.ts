@@ -53,3 +53,10 @@ export const createRatingSchema = z.object({
   review: z.string().trim().max(2000).optional(),
 });
 export type CreateRatingInput = z.infer<typeof createRatingSchema>;
+
+export const createCategorySchema = z.object({
+  name: z.string().trim().min(2, "Name must be at least 2 characters").max(60),
+});
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+
+export const categoryIdSchema = z.string().length(24);

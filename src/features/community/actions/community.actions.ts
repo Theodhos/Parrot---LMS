@@ -77,8 +77,12 @@ export async function listCommentsAction(postId: string): Promise<ActionResult<C
   return run((user) => community.listComments(user, postIdSchema.parse(postId)));
 }
 
-export async function addCommentAction(postId: string, content: string): Promise<ActionResult<CommunityCommentDTO>> {
-  return run((user) => community.addComment(user, { postId, content }));
+export async function addCommentAction(
+  postId: string,
+  content: string,
+  parentId?: string,
+): Promise<ActionResult<CommunityCommentDTO>> {
+  return run((user) => community.addComment(user, { postId, content, parentId }));
 }
 
 export async function deleteCommentAction(commentId: string): Promise<ActionResult> {

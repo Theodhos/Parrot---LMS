@@ -105,3 +105,24 @@ export function listCategories() {
 }
 
 export const publishedCourseFilter = { status: CourseStatus.PUBLISHED } as const;
+
+export function findCategoryBySlug(slug: string) {
+  return prisma.courseCategory.findUnique({ where: { slug }, select: { id: true } });
+}
+
+export function findCategoryById(id: string) {
+  return prisma.courseCategory.findUnique({ where: { id }, select: { id: true } });
+}
+
+export function createCategory(data: { name: string; slug: string }) {
+  return prisma.courseCategory.create({ data });
+}
+
+export function updateCategory(id: string, data: { name: string; slug: string }) {
+  return prisma.courseCategory.update({ where: { id }, data });
+}
+
+/** Courses in the category are kept and simply lose it (the relation is optional, so it is set to null). */
+export function deleteCategory(id: string) {
+  return prisma.courseCategory.delete({ where: { id } });
+}

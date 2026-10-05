@@ -1,8 +1,10 @@
 import { NewCourseForm } from "@/components/admin/new-course-form";
+import { requireCurrentUser } from "@/lib/auth/session";
 import { listCategories } from "@/features/courses/services/course.service";
+import { Role } from "@/generated/prisma";
 
 export default async function NewCoursePage() {
-  const categories = await listCategories();
+  const [user, categories] = await Promise.all([requireCurrentUser(), listCategories()]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -13,7 +15,7 @@ export default async function NewCoursePage() {
         </p>
       </div>
 
-      <NewCourseForm categories={categories} />
+      <NewCourseForm categories={categories} canAddCategories={user.role === Role.ADMIN} />
     </div>
   );
 }

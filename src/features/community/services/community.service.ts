@@ -180,6 +180,7 @@ function toCommentDTO(
   return {
     id: comment.id,
     postId: comment.postId,
+    parentId: comment.parentId ?? null,
     content: comment.content,
     createdAt: comment.createdAt.toISOString(),
     author: toAuthor(comment.author),
@@ -198,13 +199,25 @@ export async function listComments(viewer: SessionUser, postId: string): Promise
   return comments.map((comment) => toCommentDTO(comment, viewer));
 }
 
-/** Adds a comment and lets the post's author know (unless they are the one commenting). */
+/**
+ * Adds a comment on a post, or a reply to another member's comment, and lets
+ * the people being answered know (never the one who is writing).
+ */
 export async function addComment(
   author: SessionUser,
-  input: { postId: string; content: string },
+  input: { postId: string; content: string; parentId?: string },
 ): Promise<CommunityCommentDTO> {
   const data = createCommentSchema.parse(input);
   const post = await getPostOrThrow(data.postId);
+
+  const parent = data.parentId
+    ? await prisma.communityComment.findUnique({ where: { id: data.parentId } })
+    : null;
+  if (data.parentId && (!parent || parent.postId !== data.postId)) {
+    throw new NotFoundError("Comment");
+  }
+  // Threads are one level deep: a reply to a reply joins the same thread.
+  const threadId = parent ? (parent.parentId ?? parent.id) : null;
 
   const recent = await prisma.communityComment.count({
     where: { authorId: author.id, createdAt: { gt: new Date(Date.now() - HOUR_MS) } },
@@ -214,20 +227,32 @@ export async function addComment(
   }
 
   const comment = await prisma.communityComment.create({
-    data: { postId: data.postId, authorId: author.id, content: data.content },
+    data: {
+      postId: data.postId,
+      authorId: author.id,
+      content: data.content,
+      ...(threadId ? { parentId: threadId } : {}),
+    },
     include: { author: { select: authorSelect } },
   });
 
-  if (post.authorId !== author.id) {
+  // One notification per person: the member whose comment was answered, and the post's author.
+  const notices = new Map<string, string>();
+  if (parent) notices.set(parent.authorId, isStaff(author.role) ? "A coach replied to your comment" : "New reply to your comment");
+  if (!notices.has(post.authorId)) {
+    notices.set(post.authorId, isStaff(author.role) ? "A coach replied to your post" : "New comment on your post");
+  }
+  notices.delete(author.id);
+  if (notices.size > 0) {
     const preview = data.content.length > 120 ? `${data.content.slice(0, 117)}...` : data.content;
     await prisma.notification
-      .create({
-        data: {
-          userId: post.authorId,
-          title: isStaff(author.role) ? "A coach replied to your post" : "New comment on your post",
+      .createMany({
+        data: [...notices].map(([userId, title]) => ({
+          userId,
+          title,
           message: `${author.name}: ${preview}`,
           type: NotificationType.INFO,
-        },
+        })),
       })
       // A failed notification must not fail the comment.
       .catch(() => undefined);
@@ -242,6 +267,8 @@ export async function deleteComment(user: SessionUser, commentId: string): Promi
   if (comment.authorId !== user.id && !isStaff(user.role)) {
     throw new ForbiddenError("You can only delete your own comments");
   }
+  // Replies have no relation to their parent (see schema), so they are removed here.
+  await prisma.communityComment.deleteMany({ where: { postId: comment.postId, parentId: commentId } });
   await prisma.communityComment.delete({ where: { id: commentId } });
 }
 

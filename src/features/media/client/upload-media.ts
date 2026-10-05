@@ -11,13 +11,20 @@ export interface UploadedMedia {
   createdAt: Date;
 }
 
-/** "library": course material by staff. "community": a member's video for a community post. */
+/** "library": course material by staff. "community": a member's photo or video for a community post. */
 export type UploadScope = "library" | "community";
 
-interface UploadConfig {
+export interface UploadConfig {
   driver: "blob" | "local";
   maxBytes: number;
+  /** A tighter limit for images, where the scope has one. */
+  maxImageBytes?: number;
   acceptedTypes: string[];
+}
+
+/** The size limit that applies to this particular file. */
+export function maxBytesFor(file: { type: string }, config: UploadConfig): number {
+  return config.maxImageBytes !== undefined && file.type.startsWith("image/") ? config.maxImageBytes : config.maxBytes;
 }
 
 const configPromises = new Map<UploadScope, Promise<UploadConfig>>();
@@ -61,8 +68,8 @@ export async function uploadMediaFile(
   if (!config.acceptedTypes.includes(file.type)) {
     throw new Error(`"${file.name}" is not a supported file type`);
   }
-  if (file.size > config.maxBytes) {
-    throw new Error(`"${file.name}" is larger than the ${formatMb(config.maxBytes)} limit`);
+  if (file.size > maxBytesFor(file, config)) {
+    throw new Error(`"${file.name}" is larger than the ${formatMb(maxBytesFor(file, config))} limit`);
   }
 
   let res: Response;

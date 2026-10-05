@@ -54,6 +54,7 @@ function toPostDTO(post: PostRow, viewer: SessionUser): CommunityPostDTO {
     kind: post.kind,
     content: post.content,
     videoUrl: post.videoUrl,
+    imageUrl: post.imageUrl ?? null,
     createdAt: post.createdAt.toISOString(),
     author: toAuthor(post.author),
     likeCount: reactions(CommunityReactionKind.LIKE).length,
@@ -101,8 +102,8 @@ async function getPostOrThrow(postId: string) {
 }
 
 /**
- * Publishes a question, a win or a video post. A video post must point at a
- * file this same member uploaded to the platform's storage -- never at an
+ * Publishes a question, a win or a photo/video post. The photo or video must
+ * be a file this same member uploaded to the platform's storage -- never at an
  * arbitrary link -- so the feed cannot be used to embed outside content.
  */
 export async function createPost(author: SessionUser, input: CreatePostInput): Promise<CommunityPostDTO> {
@@ -116,17 +117,30 @@ export async function createPost(author: SessionUser, input: CreatePostInput): P
   }
 
   let videoUrl: string | null = null;
+  let imageUrl: string | null = null;
   if (data.kind === CommunityPostKind.VIDEO) {
+    const url = (data.videoUrl || data.imageUrl)!;
     const media = await prisma.media.findFirst({
-      where: { userId: author.id, type: "VIDEO", OR: [{ fileUrl: data.videoUrl }, { fileUrl: pathnameOf(data.videoUrl!) }] },
+      where: {
+        userId: author.id,
+        type: data.videoUrl ? "VIDEO" : "IMAGE",
+        OR: [{ fileUrl: url }, { fileUrl: pathnameOf(url) }],
+      },
       select: { fileUrl: true },
     });
-    if (!media) throw new ValidationError("Upload the video again -- it could not be found");
-    videoUrl = media.fileUrl;
+    if (!media) throw new ValidationError("Upload the file again -- it could not be found");
+    if (data.videoUrl) videoUrl = media.fileUrl;
+    else imageUrl = media.fileUrl;
   }
 
   const post = await prisma.communityPost.create({
-    data: { authorId: author.id, kind: data.kind, content: data.content, videoUrl },
+    data: {
+      authorId: author.id,
+      kind: data.kind,
+      content: data.content,
+      videoUrl,
+      ...(imageUrl ? { imageUrl } : {}),
+    },
     include: postInclude,
   });
   return toPostDTO(post, author);
@@ -142,14 +156,14 @@ function pathnameOf(url: string): string {
   }
 }
 
-/** The author or any staff member may delete a post; its comments, reactions and uploaded video go with it. */
+/** The author or any staff member may delete a post; its comments, reactions and uploaded photo or video go with it. */
 export async function deletePost(user: SessionUser, postId: string): Promise<void> {
   const post = await getPostOrThrow(postId);
   if (post.authorId !== user.id && !isStaff(user.role)) {
     throw new ForbiddenError("You can only delete your own posts");
   }
   await prisma.communityPost.delete({ where: { id: postId } });
-  await removeUploadedMediaFor([post.videoUrl]);
+  await removeUploadedMediaFor([post.videoUrl, post.imageUrl]);
 }
 
 /** Adds the reaction if the member has not given it, removes it if they have. Returns the new state. */

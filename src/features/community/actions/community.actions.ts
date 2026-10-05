@@ -48,6 +48,7 @@ export async function createPostAction(input: {
   kind: CommunityPostKind;
   content: string;
   videoUrl?: string;
+  imageUrl?: string;
 }): Promise<ActionResult<CommunityPostDTO>> {
   const result = await run((user) => community.createPost(user, input));
   if (result.success) refresh();

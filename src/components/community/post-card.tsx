@@ -6,6 +6,7 @@ import {
   EyeOff,
   Flag,
   Heart,
+  ImageIcon,
   MessageCircle,
   MessageCircleQuestion,
   MoreHorizontal,
@@ -169,7 +170,7 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const badge = KIND_BADGE[post.kind];
+  const badge = post.imageUrl ? { ...KIND_BADGE[post.kind], label: "Photo", icon: ImageIcon } : KIND_BADGE[post.kind];
   const BadgeIcon = badge.icon;
 
   function react(kind: "LIKE" | "CELEBRATE") {
@@ -344,6 +345,18 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
 
         <p className="mb-3 text-sm leading-relaxed break-words whitespace-pre-line text-[#4B5563]">{post.content}</p>
 
+        {post.imageUrl && (
+          <a href={post.imageUrl} target="_blank" rel="noreferrer" className="mb-3 block" aria-label="Open photo full size">
+            {/* eslint-disable-next-line @next/next/no-img-element -- member upload served from the platform's own storage */}
+            <img
+              src={post.imageUrl}
+              alt=""
+              loading="lazy"
+              className="max-h-[32rem] w-full rounded-2xl bg-gray-50 object-contain"
+            />
+          </a>
+        )}
+
         {post.videoUrl && (
           <video
             src={post.videoUrl}
@@ -454,7 +467,7 @@ export function PostCard({ post, onRemoved, className }: PostCardProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this post?</AlertDialogTitle>
             <AlertDialogDescription>
-              The post, its comments and its video are removed for everyone. This cannot be undone.
+              The post, its comments and its photo or video are removed for everyone. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -7,15 +7,19 @@ export const createPostSchema = z
   .object({
     kind: z.enum(CommunityPostKind),
     content: z.string().trim().min(1, "Write something first").max(2000, "Keep it under 2000 characters"),
-    /** Required for a VIDEO post: the URL returned by the uploader for a file this member uploaded. */
+    /**
+     * A VIDEO post carries exactly one of these: the URL returned by the
+     * uploader for a video, or for a photo, this member uploaded.
+     */
     videoUrl: z.string().trim().max(2000).optional(),
+    imageUrl: z.string().trim().max(2000).optional(),
   })
-  .refine((post) => post.kind !== CommunityPostKind.VIDEO || Boolean(post.videoUrl), {
-    message: "Choose a video to upload",
+  .refine((post) => post.kind !== CommunityPostKind.VIDEO || Boolean(post.videoUrl) !== Boolean(post.imageUrl), {
+    message: "Choose one photo or video to upload",
     path: ["videoUrl"],
   })
-  .refine((post) => post.kind === CommunityPostKind.VIDEO || !post.videoUrl, {
-    message: "Only a video post can carry a video",
+  .refine((post) => post.kind === CommunityPostKind.VIDEO || (!post.videoUrl && !post.imageUrl), {
+    message: "Only a photo or video post can carry a file",
     path: ["videoUrl"],
   });
 export type CreatePostInput = z.infer<typeof createPostSchema>;

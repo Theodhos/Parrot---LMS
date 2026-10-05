@@ -13,6 +13,8 @@ export interface CommunityPostDTO {
   kind: CommunityPostKind;
   content: string;
   videoUrl: string | null;
+  /** Set instead of videoUrl when the member shared a photo. */
+  imageUrl: string | null;
   /** ISO timestamp; formatted in the viewer's own time zone on the client. */
   createdAt: string;
   author: CommunityAuthorDTO;

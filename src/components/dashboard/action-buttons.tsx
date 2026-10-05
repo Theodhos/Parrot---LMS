@@ -1,4 +1,4 @@
-import { MessageCircleQuestion, Trophy, Video } from "lucide-react";
+import { Camera, MessageCircleQuestion, Trophy } from "lucide-react";
 import Link from "next/link";
 
 export function ActionButtons() {
@@ -38,10 +38,10 @@ export function ActionButtons() {
 
       <Link href="/community?compose=video" className="group relative overflow-hidden bg-[#88C654] rounded-2xl p-4 sm:p-5 flex items-center gap-4 hover:bg-[#7bc046] transition-colors">
         <div className="flex size-10 sm:size-12 items-center justify-center rounded-full bg-white text-[#88C654] shrink-0 z-10">
-          <Video className="size-5 sm:size-6" />
+          <Camera className="size-5 sm:size-6" />
         </div>
         <div className="flex flex-col z-10">
-          <span className="font-heading font-bold text-white text-lg leading-tight">Upload a Video</span>
+          <span className="font-heading font-bold text-white text-lg leading-tight">Photo or Video</span>
           <span className="text-white/80 text-sm">Get feedback & support</span>
         </div>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none group-hover:translate-x-2 transition-transform">

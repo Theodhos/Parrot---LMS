@@ -4,7 +4,18 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, MessageCircleQuestion, MessagesSquare, Trophy, Upload, Users, Video, X } from "lucide-react";
+import {
+  ArrowRight,
+  Camera,
+  ImageIcon,
+  MessageCircleQuestion,
+  MessagesSquare,
+  Trophy,
+  Upload,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +30,7 @@ import { EventRow } from "@/components/calendar/event-row";
 import { PostCard } from "@/components/community/post-card";
 import { cn } from "@/lib/utils";
 import { createPostAction, loadPostsAction } from "@/features/community/actions/community.actions";
-import { getUploadConfig, uploadMediaFile } from "@/features/media/client/upload-media";
+import { getUploadConfig, maxBytesFor, uploadMediaFile } from "@/features/media/client/upload-media";
 import type { CalendarEventDTO } from "@/features/calendar/types/calendar.types";
 import type { CommunityFeedPage, CommunityPostDTO } from "@/features/community/types/community.types";
 import type { CommunityPostKind } from "@/generated/prisma";
@@ -48,11 +59,11 @@ const COMPOSE_CONFIG: Record<
   },
   video: {
     kind: "VIDEO",
-    label: "Upload a Video",
+    label: "Photo or Video",
     hint: "Get feedback & support",
-    icon: Video,
+    icon: Camera,
     color: "#88C654",
-    placeholder: "What would you like feedback on in this clip?",
+    placeholder: "What would you like feedback on in this photo or clip?",
   },
 };
 
@@ -60,7 +71,7 @@ const FILTERS: { value: CommunityPostKind | "ALL"; label: string }[] = [
   { value: "ALL", label: "Everything" },
   { value: "QUESTION", label: "Questions" },
   { value: "WIN", label: "Wins" },
-  { value: "VIDEO", label: "Videos" },
+  { value: "VIDEO", label: "Photos & Videos" },
 ];
 
 const isComposeKind = (value: string | undefined): value is ComposeKind =>
@@ -145,16 +156,17 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
     try {
       const config = await getUploadConfig("community");
       if (!config.acceptedTypes.includes(file.type)) {
-        setComposeError("Choose a video file (MP4, MOV or WebM).");
+        setComposeError("Choose a photo (JPG, PNG, WebP or GIF) or a video (MP4, MOV or WebM).");
         return;
       }
-      if (file.size > config.maxBytes) {
-        setComposeError(`That video is larger than the ${formatMb(config.maxBytes)} limit.`);
+      if (file.size > maxBytesFor(file, config)) {
+        const what = file.type.startsWith("image/") ? "photo" : "video";
+        setComposeError(`That ${what} is larger than the ${formatMb(maxBytesFor(file, config))} limit.`);
         return;
       }
       setVideo(file);
     } catch (error) {
-      setComposeError(error instanceof Error ? error.message : "Could not check the video.");
+      setComposeError(error instanceof Error ? error.message : "Could not check the file.");
     }
   }
 
@@ -167,7 +179,7 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
       return;
     }
     if (config.kind === "VIDEO" && !video) {
-      setComposeError("Choose a video to upload.");
+      setComposeError("Choose a photo or video to upload.");
       return;
     }
 
@@ -175,13 +187,15 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
     setComposeError(null);
     try {
       let videoUrl: string | undefined;
+      let imageUrl: string | undefined;
       if (config.kind === "VIDEO" && video) {
         setUploadProgress(0);
         const media = await uploadMediaFile(video, (pct) => setUploadProgress(pct), "community");
-        videoUrl = media.fileUrl;
+        if (media.type === "IMAGE") imageUrl = media.fileUrl;
+        else videoUrl = media.fileUrl;
       }
 
-      const result = await createPostAction({ kind: config.kind, content, videoUrl });
+      const result = await createPostAction({ kind: config.kind, content, videoUrl, imageUrl });
       if (!result.success) {
         setComposeError(result.error);
         return;
@@ -317,7 +331,7 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
             <ul className="flex list-disc flex-col gap-2 pl-4">
               <li>Ask anything -- coaches and other members reply in the comments.</li>
               <li>Share a win so everyone can celebrate it with you.</li>
-              <li>Upload a short clip to get feedback on your practice.</li>
+              <li>Upload a photo or a short clip to get feedback on your practice.</li>
               <li>Be kind. Report anything that does not belong here.</li>
             </ul>
           </div>
@@ -348,13 +362,17 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="video/mp4,video/webm,video/quicktime,video/x-m4v,video/ogg"
+                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-m4v,video/ogg"
                     className="hidden"
                     onChange={(e) => void chooseVideo(e.target.files?.[0])}
                   />
                   {video ? (
                     <div className="flex items-center gap-2 rounded-xl border bg-gray-50 px-3 py-2 text-sm">
-                      <Video className="size-4 shrink-0 text-[#5C9A2B]" />
+                      {video.type.startsWith("image/") ? (
+                        <ImageIcon className="size-4 shrink-0 text-[#5C9A2B]" />
+                      ) : (
+                        <Video className="size-4 shrink-0 text-[#5C9A2B]" />
+                      )}
                       <span className="flex-1 truncate" title={video.name}>
                         {video.name}
                       </span>
@@ -368,7 +386,7 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
                             setVideo(null);
                             if (fileInputRef.current) fileInputRef.current.value = "";
                           }}
-                          aria-label="Remove video"
+                          aria-label="Remove file"
                           className="text-gray-400 hover:text-[#FF5757]"
                         >
                           <X className="size-4" />
@@ -382,8 +400,8 @@ export function CommunityFeed({ initialPage, initialCompose, nextCall }: Communi
                       className="text-muted-foreground flex flex-col items-center gap-1 rounded-xl border border-dashed px-3 py-5 text-xs transition-colors hover:border-[#88C654] hover:text-[#5C9A2B]"
                     >
                       <Upload className="size-5" />
-                      <span className="text-foreground text-sm font-medium">Choose a video</span>
-                      MP4, MOV or WebM
+                      <span className="text-foreground text-sm font-medium">Choose a photo or video</span>
+                      JPG, PNG, WebP, GIF, MP4, MOV or WebM
                     </button>
                   )}
                   {uploadProgress !== null && (

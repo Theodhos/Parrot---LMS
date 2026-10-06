@@ -19,7 +19,7 @@ export interface EnrollFormProps {
  * Free courses enroll with one click. Paid courses link out to checkout on
  * GoHighLevel -- after payment, the buyer is enrolled under their checkout
  * email and the checkout redirects them to /welcome to choose their username
- * and password (GoHighLevel can also email a setup link as a backup).
+ * and password. The purchase sends no email.
  */
 export function EnrollForm({ courseId, priceCents, buyUrl }: EnrollFormProps) {
   const router = useRouter();

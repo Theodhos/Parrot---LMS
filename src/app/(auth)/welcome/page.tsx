@@ -25,7 +25,8 @@ export default async function WelcomePage({ searchParams }: WelcomePageProps) {
       </span>
       <h1 className="font-heading mt-4 text-3xl font-bold text-[#1f1737] sm:text-4xl">Create your login</h1>
       <p className="mt-2 text-base font-medium text-[#6D5D3B]">
-        Thank you for your purchase! Choose a username and password to open your course.
+        Thank you for your purchase! Enter the email you used at checkout, then choose a username and password
+        to open your course.
       </p>
 
       <div className="mt-8">

@@ -193,8 +193,8 @@ model Payment {
   status           PaymentStatus @default(SUCCEEDED)
   // Course slugs this payment unlocked -- what a refund of this transaction revokes.
   courseSlugs      String[]
-  // True when the account had no password at purchase time, so the buyer was
-  // sent an account-setup link (PasswordSetupToken) instead of the login page.
+  // True when the account had no password at purchase time, so the buyer
+  // still had to choose a username and password on /welcome.
   issuedCredentials Boolean      @default(false)
   processedAt      DateTime      @default(now())
   createdAt        DateTime      @default(now())

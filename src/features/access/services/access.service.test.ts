@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { CourseStatus, EmailStatus, EnrollmentStatus, PaymentStatus, Role } from "@/generated/prisma";
-import { ForbiddenError, UnauthorizedError, ValidationError } from "@/lib/errors/app-error";
+import { CourseStatus, EnrollmentStatus, PaymentStatus, Role } from "@/generated/prisma";
+import { ConflictError, ForbiddenError, UnauthorizedError, ValidationError } from "@/lib/errors/app-error";
 import { handleCoursePurchase, handleCourseRefund, requireCourseAccess } from "./access.service";
 import { scopeCourseQueriesTo } from "./purchase-test-support";
-import { activateAccountFromToken } from "@/features/auth/services/activation.service";
+import { claimAccountAfterCheckout } from "@/features/auth/services/activation.service";
 import { verifyCredentials } from "@/features/auth/services/auth.service";
 import type { CoursePurchase } from "@/features/access/schemas/access.schema";
 
@@ -17,23 +17,21 @@ interface GhlCall {
 describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
   const stamp = Date.now();
   const buyerEmail = `ghl-buyer-${stamp}@test.local`;
-  const lateBuyerEmail = `ghl-late-buyer-${stamp}@test.local`;
   const instructorEmail = `ghl-instructor-${stamp}@test.local`;
   const courseSlug = `ghl-course-${stamp}`;
   const txn = `txn-${stamp}`;
-  const lateTxn = `txn-late-${stamp}`;
   const username = `buyer-${stamp}`;
   const headers = new Headers({ host: "lms.test.local" });
 
   let instructorId: string;
   let courseId: string;
-  let setupToken: string;
   let courseScope: ReturnType<typeof scopeCourseQueriesTo>;
   const savedGhlToken = process.env.GHL_API_TOKEN;
 
-  // Stand-in for the GoHighLevel API: records every call, never leaves the process.
+  // Stand-in for the GoHighLevel API: records every call, never leaves the
+  // process. A purchase must never reach it -- that is what keeps a purchase
+  // from setting off any email.
   const ghlCalls: GhlCall[] = [];
-  let ghlDown = false;
 
   const purchase = (overrides: Partial<CoursePurchase> = {}): CoursePurchase => ({
     email: buyerEmail,
@@ -44,9 +42,6 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     ...overrides,
   });
 
-  const linkSentToGhl = () =>
-    ghlCalls.flatMap((c) => c.body.customFields ?? []).find((f) => f.key === "course_login_url")?.field_value;
-  const tagsSentToGhl = () => ghlCalls.flatMap((c) => c.body.tags ?? []);
   const student = (id: string) => ({ id, role: Role.STUDENT }) as never;
 
   beforeAll(async () => {
@@ -55,7 +50,6 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
       "fetch",
       vi.fn(async (url: string | URL, init: RequestInit) => {
         ghlCalls.push({ url: String(url), method: init.method!, body: JSON.parse(String(init.body)) });
-        if (ghlDown) return new Response("upstream unavailable", { status: 503 });
         return Response.json({ contact: { id: "contact-123" } });
       }),
     );
@@ -80,7 +74,6 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
 
   beforeEach(() => {
     ghlCalls.length = 0;
-    ghlDown = false;
   });
 
   afterAll(async () => {
@@ -90,7 +83,7 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     else process.env.GHL_API_TOKEN = savedGhlToken;
 
     const buyers = await prisma.user.findMany({
-      where: { email: { in: [buyerEmail, lateBuyerEmail] } },
+      where: { email: buyerEmail },
       select: { id: true },
     });
     const buyerIds = buyers.map((b) => b.id);
@@ -114,10 +107,10 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     expect(ghlCalls).toHaveLength(0);
   });
 
-  it("provisions the account and access, and hands GoHighLevel a setup link instead of a password", async () => {
+  it("provisions the account and access without touching GoHighLevel, so no email can go out", async () => {
     const result = await handleCoursePurchase(purchase(), headers);
 
-    expect(result).toMatchObject({ newAccount: true, duplicate: false, emailStatus: EmailStatus.SENT });
+    expect(result).toMatchObject({ newAccount: true, duplicate: false });
     expect(result.enrolledCourseSlugs).toEqual([courseSlug]);
 
     // The account exists but cannot be logged into until the buyer sets it up.
@@ -132,34 +125,27 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     const payment = await prisma.payment.findUnique({ where: { ghlTransactionId: txn } });
     expect(payment).toMatchObject({ status: PaymentStatus.SUCCEEDED, issuedCredentials: true, courseSlugs: ["*"] });
 
-    // Field first, then the tag that fires the email workflow -- and the only
-    // field written is the link.
-    expect(ghlCalls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual([
-      "PUT /contacts/contact-123",
-      "POST /contacts/contact-123/tags",
-    ]);
-    expect(ghlCalls[0]!.body.customFields!.map((f) => f.key)).toEqual(["course_login_url"]);
-    expect(tagsSentToGhl()).toEqual(["course-credentials-ready"]);
-
-    const link = linkSentToGhl()!;
-    expect(link).toMatch(/^https:\/\/lms\.test\.local\/activate\?token=[0-9a-f]{64}$/);
-    setupToken = new URL(link).searchParams.get("token")!;
+    // Nothing reaches the buyer's GoHighLevel contact -- no field, no tag --
+    // so no workflow there can email them, and no setup link is minted.
+    expect(ghlCalls).toHaveLength(0);
+    expect(await prisma.emailLog.count({ where: { userId: user!.id } })).toBe(0);
+    expect(await prisma.passwordSetupToken.count({ where: { userId: user!.id } })).toBe(0);
   });
 
-  it("treats a redelivered webhook as a no-op: no duplicates, no second link, no second email", async () => {
+  it("treats a redelivered webhook as a no-op: no duplicates, and still no email", async () => {
     const result = await handleCoursePurchase(purchase(), headers);
     const user = await prisma.user.findUnique({ where: { email: buyerEmail } });
 
-    expect(result).toMatchObject({ duplicate: true, emailStatus: EmailStatus.SENT });
+    expect(result).toMatchObject({ duplicate: true });
     expect(await prisma.user.count({ where: { email: buyerEmail } })).toBe(1);
     expect(await prisma.payment.count({ where: { ghlTransactionId: txn } })).toBe(1);
     expect(await prisma.enrollment.count({ where: { userId: user!.id, courseId } })).toBe(1);
-    expect(await prisma.passwordSetupToken.count({ where: { userId: user!.id } })).toBe(1);
     expect(ghlCalls).toHaveLength(0);
+    expect(await prisma.emailLog.count({ where: { userId: user!.id } })).toBe(0);
   });
 
-  it("lets the buyer choose their own username and password through the link, then log in with them", async () => {
-    await activateAccountFromToken(setupToken, username, "MyOwnPass123");
+  it("lets the buyer choose their own username and password with their checkout email, then log in with them", async () => {
+    await claimAccountAfterCheckout(buyerEmail, username, "MyOwnPass123");
 
     const user = await prisma.user.findUnique({ where: { email: buyerEmail } });
     expect(user!.username).toBe(username);
@@ -167,49 +153,11 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
 
     expect((await verifyCredentials(username, "MyOwnPass123")).email).toBe(buyerEmail);
     await expect(verifyCredentials(username, "WrongPass123")).rejects.toBeInstanceOf(UnauthorizedError);
-    // Single use: the link cannot set the credentials a second time.
-    await expect(activateAccountFromToken(setupToken, username, "Another123")).rejects.toBeInstanceOf(
-      ValidationError,
+    // Once only: the credentials cannot be set a second time.
+    await expect(claimAccountAfterCheckout(buyerEmail, username, "Another123")).rejects.toBeInstanceOf(
+      ConflictError,
     );
     await expect(requireCourseAccess(student(user!.id), { id: courseId, instructorId })).resolves.toBeUndefined();
-  });
-
-  it("keeps the account and access when GoHighLevel is down, and retries on redelivery", async () => {
-    ghlDown = true;
-    const late = purchase({ email: lateBuyerEmail, transactionId: lateTxn, contactId: "contact-late" });
-    const failed = await handleCoursePurchase(late, headers);
-
-    expect(failed.emailStatus).toBe(EmailStatus.FAILED);
-    const user = await prisma.user.findUnique({ where: { email: lateBuyerEmail } });
-    await expect(requireCourseAccess(student(user!.id), { id: courseId, instructorId })).resolves.toBeUndefined();
-
-    ghlDown = false;
-    ghlCalls.length = 0;
-    const retried = await handleCoursePurchase(late, headers);
-
-    expect(retried).toMatchObject({ duplicate: true, emailStatus: EmailStatus.SENT });
-    expect(tagsSentToGhl()).toEqual(["course-credentials-ready"]);
-    expect(await prisma.payment.count({ where: { ghlTransactionId: lateTxn } })).toBe(1);
-  });
-
-  it("issues a fresh link on redelivery once every earlier link has expired unused", async () => {
-    const user = await prisma.user.findUnique({ where: { email: lateBuyerEmail } });
-    const late = purchase({ email: lateBuyerEmail, transactionId: lateTxn, contactId: "contact-late" });
-
-    await handleCoursePurchase(late, headers);
-    expect(ghlCalls).toHaveLength(0);
-
-    await prisma.passwordSetupToken.updateMany({
-      where: { userId: user!.id },
-      data: { expiresAt: new Date(Date.now() - 1000) },
-    });
-    const result = await handleCoursePurchase(late, headers);
-
-    expect(result.emailStatus).toBe(EmailStatus.SENT);
-    expect(tagsSentToGhl()).toEqual(["course-credentials-ready"]);
-    const freshToken = new URL(linkSentToGhl()!).searchParams.get("token")!;
-    const row = await prisma.passwordSetupToken.findUnique({ where: { token: freshToken } });
-    expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
   it("denies course access to an account that never purchased (403)", async () => {
@@ -244,16 +192,15 @@ describe("access.service purchase/refund flow (local MongoDB-backed)", () => {
     // The account itself survives the refund.
     expect((await verifyCredentials(username, "MyOwnPass123")).email).toBe(buyerEmail);
 
-    // Buying again (new transaction) re-activates the same enrollment row. The
-    // account already has a password, so GHL gets the login page, not a setup link.
+    // Buying again (new transaction) re-activates the same enrollment row and
+    // keeps the login as it is -- again without a word to GoHighLevel.
     const result = await handleCoursePurchase(purchase({ transactionId: `${txn}-repurchase` }), headers);
     expect(result.newAccount).toBe(false);
     const restored = await prisma.enrollment.findUnique({
       where: { userId_courseId: { userId: user!.id, courseId } },
     });
     expect(restored?.status).toBe(EnrollmentStatus.ACTIVE);
-    expect(linkSentToGhl()).toBe("https://lms.test.local/login");
-    expect(tagsSentToGhl()).toEqual(["course-access-granted"]);
+    expect(ghlCalls).toHaveLength(0);
     expect((await prisma.user.findUnique({ where: { email: buyerEmail } }))!.password).toBe(user!.password);
   });
 });

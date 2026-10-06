@@ -45,9 +45,8 @@ export async function requestPasswordReset(identifier: string, siteUrl: string):
       locationId: payment?.ghlLocationId ?? undefined,
       email: user.email,
     },
-    // Always the password-reset workflow, also for a setup link: the
-    // credentials-ready one fires on every purchase and may be switched off
-    // now that buyers set up their login on /welcome straight after checkout.
+    // The one tag the app ever adds, so this request -- made by the account's
+    // owner -- is the only thing here that can set off a GoHighLevel email.
     tag: GHL_TAGS.passwordReset,
     buildLink: async () =>
       hasPassword

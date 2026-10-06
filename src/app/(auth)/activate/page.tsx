@@ -19,7 +19,7 @@ export default async function ActivatePage({ searchParams }: ActivatePageProps) 
           <CardTitle>Link expired or invalid</CardTitle>
           <CardDescription>
             This account-setup link is no longer valid. It may have already been used, or it
-            expired 48 hours after your course purchase.
+            expired 48 hours after it was requested.
           </CardDescription>
         </CardHeader>
         <CardContent>

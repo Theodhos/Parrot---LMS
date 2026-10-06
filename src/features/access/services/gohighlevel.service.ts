@@ -4,19 +4,19 @@ const GHL_API_BASE = "https://services.leadconnectorhq.com";
 const GHL_API_VERSION = "2021-07-28";
 
 /**
- * Contact custom field the GoHighLevel email workflows merge as
- * {{contact.course_login_url}}: the buyer's personal account-setup link, or
- * the login page for an account that already has a password. Unique key
- * without the "contact." prefix, overridable when the sub-account's differs.
+ * Contact custom field the GoHighLevel password-reset workflow merges as
+ * {{contact.course_login_url}}: the link the account's owner asked for on
+ * /forgot-password. Unique key without the "contact." prefix, overridable
+ * when the sub-account's differs.
  */
 export const ACCESS_LINK_FIELD_KEY = process.env.GHL_LOGIN_URL_FIELD_KEY || "course_login_url";
 
-/** Tags that trigger the matching GoHighLevel email workflow. */
+/**
+ * Tags that trigger the matching GoHighLevel email workflow. Only a
+ * forgot-password request, made by the account's owner, ever adds one -- a
+ * purchase touches no contact and so can never set off an email.
+ */
 export const GHL_TAGS = {
-  /** New buyer without a password -- workflow emails the link to create their username and password. */
-  credentialsReady: process.env.GHL_CREDENTIALS_TAG || "course-credentials-ready",
-  /** Repeat purchase on an account that keeps its password -- workflow emails a "course unlocked" notice. */
-  accessGranted: process.env.GHL_ACCESS_GRANTED_TAG || "course-access-granted",
   /** Forgot-password request -- workflow emails the link to choose a new password. */
   passwordReset: process.env.GHL_PASSWORD_RESET_TAG || "course-password-reset",
 } as const;
@@ -28,11 +28,11 @@ export interface GhlContactRef {
 }
 
 /**
- * Server-to-server client for the GoHighLevel (LeadConnector) API. Checkout,
- * payment AND the access email all live in GoHighLevel; the backend owns
- * identity (MongoDB, bcrypt) and pushes the buyer's access link onto their
- * GHL contact so the email workflow can merge it in. Responses are parsed,
- * never logged wholesale -- they can echo the custom fields back.
+ * Server-to-server client for the GoHighLevel (LeadConnector) API. Checkout
+ * and payment live in GoHighLevel; the backend owns identity (MongoDB,
+ * bcrypt). The only thing ever pushed to a contact is a forgot-password
+ * link, so the password-reset workflow can merge it in. Responses are
+ * parsed, never logged wholesale -- they can echo the custom fields back.
  */
 async function ghlFetch(path: string, init: { method: string; body: unknown }): Promise<unknown> {
   const token = process.env.GHL_API_TOKEN;

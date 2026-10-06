@@ -83,7 +83,13 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
             className={`${fieldClassName} pr-4`}
           />
         </div>
-        {state.fieldErrors?.email && <p className={fieldErrorClassName}>{state.fieldErrors.email[0]}</p>}
+        {state.fieldErrors?.email ? (
+          <p className={fieldErrorClassName}>{state.fieldErrors.email[0]}</p>
+        ) : (
+          <p className="text-xs font-medium text-[#8a7b5c]">
+            Must be the same email you entered at checkout &mdash; a different one cannot create a login.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

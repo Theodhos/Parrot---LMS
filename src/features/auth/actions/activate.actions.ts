@@ -4,7 +4,12 @@ import { AuthError } from "next-auth";
 import { z, ZodError } from "zod";
 import { signIn } from "@/lib/auth/auth";
 import { registerSchema, usernameSchema } from "@/features/auth/schemas/auth.schema";
-import { activateAccountFromToken, claimAccountAfterCheckout } from "@/features/auth/services/activation.service";
+import {
+  activateAccountFromToken,
+  claimAccountAfterCheckout,
+  getCheckoutEmailStatus,
+  type CheckoutEmailStatus,
+} from "@/features/auth/services/activation.service";
 import { AppError } from "@/lib/errors/app-error";
 
 const activateSchema = z.object({
@@ -27,6 +32,16 @@ const claimSchema = z.object({
 export interface ClaimActionState extends ActivateActionState {
   /** No purchase is on record for this email yet -- the webhook may still be on its way; retry shortly. */
   awaitingPayment?: boolean;
+}
+
+/**
+ * The post-checkout page verifies the email as soon as it is typed, so a
+ * buyer learns whether it matches their purchase before choosing a password.
+ */
+export async function checkCheckoutEmailAction(email: string): Promise<CheckoutEmailStatus | "invalid"> {
+  const parsed = claimSchema.shape.email.safeParse(email);
+  if (!parsed.success) return "invalid";
+  return getCheckoutEmailStatus(parsed.data);
 }
 
 /**
@@ -57,10 +72,12 @@ export async function claimAccountAfterCheckoutAction(formData: FormData): Promi
   }
 
   try {
+    // A brand-new member sees the one-time offer page first; its "No thanks"
+    // leads on to the dashboard.
     await signIn("credentials", {
       email,
       password: formData.get("password"),
-      redirectTo: "/dashboard",
+      redirectTo: "/offer",
     });
     return { error: null };
   } catch (error) {

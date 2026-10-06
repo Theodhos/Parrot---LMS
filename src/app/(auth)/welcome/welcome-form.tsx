@@ -1,13 +1,41 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
-import { ArrowRight, CircleAlert, Eye, EyeOff, LoaderCircle, Lock, Mail, UserRound } from "lucide-react";
-import { claimAccountAfterCheckoutAction, type ClaimActionState } from "@/features/auth/actions/activate.actions";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type FormEvent } from "react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  CircleAlert,
+  CircleCheck,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  Lock,
+  Mail,
+  UserRound,
+} from "lucide-react";
+import {
+  checkCheckoutEmailAction,
+  claimAccountAfterCheckoutAction,
+  type ClaimActionState,
+} from "@/features/auth/actions/activate.actions";
 
-// The checkout redirect can land here before the purchase webhook does, so a
-// "no purchase yet" answer is retried for a while before it is shown as an error.
-const PAYMENT_RETRY_INTERVAL_MS = 3000;
-const PAYMENT_WAIT_MS = 60_000;
+// The checkout redirect can land here before the purchase webhook does. For
+// the first minute after the page opens, "no purchase on record" therefore
+// reads as "still on its way". After that it is reported at once, while the
+// page keeps re-checking quietly in case the webhook is unusually late.
+const PAYMENT_GRACE_MS = 60_000;
+const RECHECK_INTERVAL_MS = 3000;
+const LATE_RECHECK_INTERVAL_MS = 6000;
+const STOP_RECHECKING_AFTER_MS = 5 * 60_000;
+const TYPING_PAUSE_MS = 500;
+
+/**
+ * How the typed email stands against the purchases on record: verified as
+ * soon as it is typed, so a buyer knows before choosing a password.
+ */
+type EmailCheck = "idle" | "checking" | "waiting" | "ready" | "not-found" | "already-set-up" | "expired";
+
+const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 const labelClassName = "text-sm font-bold text-[#3E341F]";
 const fieldClassName =
@@ -15,19 +43,90 @@ const fieldClassName =
 const fieldIconClassName =
   "pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#a8997a] transition-colors group-focus-within:text-[#FF5757]";
 const fieldErrorClassName = "text-xs font-medium text-[#c53030]";
+const fieldHintClassName = "text-xs font-medium text-[#8a7b5c]";
+const emailStatusClassName = "flex items-start gap-1.5 text-xs font-medium";
+const inlineLinkClassName = "font-bold underline underline-offset-2";
 
 export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
   const [state, setState] = useState<ClaimActionState>({ error: null });
+  const [emailCheck, setEmailCheck] = useState<EmailCheck>(looksLikeEmail(defaultEmail) ? "checking" : "idle");
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [pending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
+
+  const emailInput = useRef<HTMLInputElement>(null);
+  const openedAt = useRef(0);
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Only the newest check may report: an answer for an email typed over since is dropped.
+  const latestCheck = useRef(0);
+
+  function cancelEmailCheck() {
+    clearTimeout(checkTimer.current);
+    latestCheck.current += 1;
+  }
+
+  function verifyEmail(value: string, delay: number) {
+    cancelEmailCheck();
+    const check = latestCheck.current;
+
+    checkTimer.current = setTimeout(async () => {
+      let status: Awaited<ReturnType<typeof checkCheckoutEmailAction>>;
+      try {
+        status = await checkCheckoutEmailAction(value);
+      } catch {
+        // Could not ask: say nothing here and let the submit give the answer.
+        status = "invalid";
+      }
+      if (check !== latestCheck.current) return;
+
+      if (status === "invalid") {
+        setEmailCheck("idle");
+        return;
+      }
+      if (status !== "awaiting-payment") {
+        setEmailCheck(status);
+        return;
+      }
+
+      const sinceOpened = Date.now() - openedAt.current;
+      const inGracePeriod = sinceOpened < PAYMENT_GRACE_MS;
+      setEmailCheck(inGracePeriod ? "waiting" : "not-found");
+      if (sinceOpened < STOP_RECHECKING_AFTER_MS) {
+        verifyEmail(value, inGracePeriod ? RECHECK_INTERVAL_MS : LATE_RECHECK_INTERVAL_MS);
+      }
+    }, delay);
+  }
+
+  useEffect(() => {
+    openedAt.current = Date.now();
+    if (looksLikeEmail(defaultEmail)) verifyEmail(defaultEmail, 0);
+    return cancelEmailCheck;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the email the checkout passed along
+  }, []);
+
+  function handleEmailChange(event: ChangeEvent<HTMLInputElement>) {
+    const { value } = event.target;
+    if (looksLikeEmail(value)) {
+      setEmailCheck("checking");
+      verifyEmail(value, TYPING_PAUSE_MS);
+    } else {
+      cancelEmailCheck();
+      setEmailCheck("idle");
+    }
+  }
+
+  function checkEmailAgain() {
+    const value = emailInput.current?.value ?? "";
+    if (!looksLikeEmail(value)) return;
+    setEmailCheck("checking");
+    verifyEmail(value, 0);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
     startTransition(async () => {
-      const deadline = Date.now() + PAYMENT_WAIT_MS;
       try {
         for (;;) {
           // On success the action signs the buyer in and redirects to the dashboard.
@@ -36,21 +135,25 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
             setState(result);
             return;
           }
-          if (Date.now() >= deadline) {
-            setState({
-              error:
-                "We couldn't find a purchase for this email yet. Check that it is the email you used at checkout, then try again in a minute.",
-            });
+          if (Date.now() - openedAt.current >= PAYMENT_GRACE_MS) {
+            // The email field carries the explanation.
+            setState({ error: null });
+            cancelEmailCheck();
+            setEmailCheck("not-found");
+            emailInput.current?.focus();
             return;
           }
           setConfirmingPayment(true);
-          await new Promise((resolve) => setTimeout(resolve, PAYMENT_RETRY_INTERVAL_MS));
+          await new Promise((resolve) => setTimeout(resolve, RECHECK_INTERVAL_MS));
         }
       } finally {
         setConfirmingPayment(false);
       }
     });
   }
+
+  // An email that cannot create a login is explained under its field; the button would only repeat it.
+  const emailRefused = emailCheck === "not-found" || emailCheck === "already-set-up" || emailCheck === "expired";
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -71,6 +174,7 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
         <div className="group relative">
           <Mail className={fieldIconClassName} />
           <input
+            ref={emailInput}
             id="email"
             name="email"
             type="email"
@@ -79,17 +183,67 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
             spellCheck={false}
             placeholder="you@example.com"
             defaultValue={defaultEmail}
+            onChange={handleEmailChange}
             required
+            aria-describedby="email-status"
             className={`${fieldClassName} pr-4`}
           />
         </div>
-        {state.fieldErrors?.email ? (
-          <p className={fieldErrorClassName}>{state.fieldErrors.email[0]}</p>
-        ) : (
-          <p className="text-xs font-medium text-[#8a7b5c]">
-            Must be the same email you entered at checkout &mdash; a different one cannot create a login.
-          </p>
-        )}
+        <div id="email-status" aria-live="polite">
+          {state.fieldErrors?.email ? (
+            <p className={fieldErrorClassName}>{state.fieldErrors.email[0]}</p>
+          ) : emailCheck === "checking" ? (
+            <p className={`${emailStatusClassName} text-[#8a7b5c]`}>
+              <LoaderCircle className="mt-px size-3.5 shrink-0 animate-spin" />
+              Checking this email against your purchase...
+            </p>
+          ) : emailCheck === "waiting" ? (
+            <p className={`${emailStatusClassName} text-[#8a7b5c]`}>
+              <LoaderCircle className="mt-px size-3.5 shrink-0 animate-spin" />
+              Looking for your purchase... right after checkout this can take a few seconds.
+            </p>
+          ) : emailCheck === "ready" ? (
+            <p className={`${emailStatusClassName} text-[#4a6b22]`}>
+              <CircleCheck className="mt-px size-3.5 shrink-0" />
+              Purchase found. Now choose your username and password.
+            </p>
+          ) : emailCheck === "not-found" ? (
+            <p className={`${emailStatusClassName} text-[#c53030]`}>
+              <CircleAlert className="mt-px size-3.5 shrink-0" />
+              <span>
+                No purchase found for this email. Enter the exact email you used at checkout.{" "}
+                <button type="button" onClick={checkEmailAgain} className={inlineLinkClassName}>
+                  Check again
+                </button>
+              </span>
+            </p>
+          ) : emailCheck === "already-set-up" ? (
+            <p className={`${emailStatusClassName} text-[#c53030]`}>
+              <CircleAlert className="mt-px size-3.5 shrink-0" />
+              <span>
+                This email already has a login.{" "}
+                <Link href="/login" className={inlineLinkClassName}>
+                  Sign in instead
+                </Link>
+              </span>
+            </p>
+          ) : emailCheck === "expired" ? (
+            <p className={`${emailStatusClassName} text-[#c53030]`}>
+              <CircleAlert className="mt-px size-3.5 shrink-0" />
+              <span>
+                This page works for 24 hours after a purchase.{" "}
+                <Link href="/forgot-password" className={inlineLinkClassName}>
+                  Use &ldquo;Forgot password&rdquo;
+                </Link>{" "}
+                to finish setting up your account.
+              </span>
+            </p>
+          ) : (
+            <p className={fieldHintClassName}>
+              Must be the same email you entered at checkout &mdash; a different one cannot create a login.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -145,7 +299,7 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
         {state.fieldErrors?.password ? (
           <p className={fieldErrorClassName}>{state.fieldErrors.password[0]}</p>
         ) : (
-          <p className="text-xs font-medium text-[#8a7b5c]">
+          <p className={fieldHintClassName}>
             At least 8 characters, with an uppercase letter, a lowercase letter and a number.
           </p>
         )}
@@ -153,7 +307,7 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || emailRefused}
         className="group/submit mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FF6B6B] text-base font-bold text-white shadow-[0_12px_24px_-12px_rgba(255,87,87,0.8)] transition-all outline-none hover:bg-[#ff5555] focus-visible:ring-4 focus-visible:ring-[#FF6B6B]/30 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-70"
       >
         {pending ? (

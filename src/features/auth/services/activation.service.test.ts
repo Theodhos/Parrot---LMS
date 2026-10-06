@@ -5,6 +5,7 @@ import {
   activateAccountFromToken,
   claimAccountAfterCheckout,
   createPasswordSetupToken,
+  getCheckoutEmailStatus,
   getPasswordSetupContext,
 } from "./activation.service";
 import { verifyCredentials } from "./auth.service";
@@ -86,6 +87,22 @@ describe("claimAccountAfterCheckout (local MongoDB-backed)", () => {
     await expect(verifyCredentials(email, "Password123")).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it("verifies an email against the purchases on record without changing anything", async () => {
+    expect(await getCheckoutEmailStatus(`nobody-${stamp}@test.local`)).toBe("awaiting-payment");
+    expect(await getCheckoutEmailStatus(email)).toBe("awaiting-payment");
+
+    const payment = await recordPayment(userIds[1]!);
+    expect(await getCheckoutEmailStatus(lateEmail)).toBe("ready");
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+    });
+    expect(await getCheckoutEmailStatus(lateEmail)).toBe("expired");
+    await prisma.payment.delete({ where: { id: payment.id } });
+
+    expect(await prisma.user.findUnique({ where: { email: lateEmail } })).toMatchObject({ password: null });
+  });
+
   it("sets the buyer's own username and password once the purchase is recorded", async () => {
     await recordPayment(userIds[0]!);
     const emailedToken = await createPasswordSetupToken(userIds[0]!);
@@ -102,6 +119,7 @@ describe("claimAccountAfterCheckout (local MongoDB-backed)", () => {
       ConflictError,
     );
     expect((await verifyCredentials(email, "Password123")).email).toBe(email);
+    expect(await getCheckoutEmailStatus(email)).toBe("already-set-up");
   });
 
   it("refuses a username another account already uses, and a purchase older than 24 hours", async () => {

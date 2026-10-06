@@ -79,6 +79,39 @@ const CHECKOUT_CLAIM_WINDOW_HOURS = 24;
 export type CheckoutClaimResult = { status: "claimed"; email: string } | { status: "awaiting-payment" };
 
 /**
+ * Where an email stands for the post-checkout page: "ready" (a purchase is on
+ * record and the login is still to be created), "awaiting-payment" (no
+ * purchase on record -- a wrong email, or the webhook is still on its way),
+ * "already-set-up" or "expired" (bought more than 24 hours ago).
+ */
+export type CheckoutEmailStatus = "ready" | "awaiting-payment" | "already-set-up" | "expired";
+
+async function lookUpCheckoutClaim(email: string) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, password: true },
+  });
+  if (!user) return { status: "awaiting-payment" } as const;
+  if (user.password) return { status: "already-set-up" } as const;
+
+  const payment = await prisma.payment.findFirst({
+    where: { userId: user.id, status: PaymentStatus.SUCCEEDED },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (!payment) return { status: "awaiting-payment" } as const;
+  if (payment.createdAt.getTime() < Date.now() - CHECKOUT_CLAIM_WINDOW_HOURS * 60 * 60 * 1000) {
+    return { status: "expired" } as const;
+  }
+  return { status: "ready", user } as const;
+}
+
+/** The same check claimAccountAfterCheckout makes, without changing anything -- for verifying the email as it is typed. */
+export async function getCheckoutEmailStatus(email: string): Promise<CheckoutEmailStatus> {
+  return (await lookUpCheckoutClaim(email)).status;
+}
+
+/**
  * The page GoHighLevel redirects a buyer to straight after checkout: they
  * type the email they paid with and choose a username and password, with no
  * emailed link in between. The browser redirect carries no proof of who
@@ -94,23 +127,17 @@ export async function claimAccountAfterCheckout(
   username: string,
   password: string,
 ): Promise<CheckoutClaimResult> {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return { status: "awaiting-payment" };
-  if (user.password) {
+  const claim = await lookUpCheckoutClaim(email);
+  if (claim.status === "awaiting-payment") return { status: "awaiting-payment" };
+  if (claim.status === "already-set-up") {
     throw new ConflictError("This email already has a login -- sign in instead");
   }
-
-  const payment = await prisma.payment.findFirst({
-    where: { userId: user.id, status: PaymentStatus.SUCCEEDED },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
-  if (!payment) return { status: "awaiting-payment" };
-  if (payment.createdAt.getTime() < Date.now() - CHECKOUT_CLAIM_WINDOW_HOURS * 60 * 60 * 1000) {
+  if (claim.status === "expired") {
     throw new ValidationError(
       'This page works for 24 hours after a purchase. Use "Forgot password" on the sign-in page to finish setting up your account',
     );
   }
+  const { user } = claim;
 
   const usernameTaken = await prisma.user.findFirst({
     where: { username, id: { not: user.id } },

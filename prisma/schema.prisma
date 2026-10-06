@@ -260,6 +260,11 @@ model User {
   // then -- being signed in automatically after choosing a password on
   // /welcome does not count. A buyer's first such login lands on /thank-you.
   firstLoginAt  DateTime?
+  // When GoHighLevel last registered this contact as a free member (the
+  // contact webhook). It grants no paid course. While the account still has
+  // no password, its owner may create one on /create-password for a few
+  // days from this moment.
+  invitedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

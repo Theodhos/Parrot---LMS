@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/client";
 // Middleware). Every domain action/API handler re-checks authentication and
 // role/ownership server-side — this just avoids flashing protected pages to
 // signed-out visitors or the wrong role.
-const STUDENT_PREFIXES = ["/dashboard", "/courses", "/analytics", "/profile", "/community", "/calendar", "/support"];
+const STUDENT_PREFIXES = ["/dashboard", "/courses", "/free-courses", "/analytics", "/profile", "/community", "/calendar", "/support"];
 const ADMIN_PREFIX = "/admin";
 
 export default auth(async (req) => {
@@ -48,6 +48,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/courses/:path*",
+    "/free-courses/:path*",
     "/analytics/:path*",
     "/profile/:path*",
     "/community/:path*",

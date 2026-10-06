@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { BookOpen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { UserCoursesDialog } from "@/components/admin/user-courses-dialog";
 import {
   Table,
   TableBody,
@@ -60,6 +63,7 @@ export function UsersTable({
 }: UsersTableProps) {
   const [items, setItems] = useState(initialItems);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [coursesFor, setCoursesFor] = useState<UserListItem | null>(null);
 
   async function handleRoleChange(userId: string, role: Role) {
     const previous = items;
@@ -93,6 +97,7 @@ export function UsersTable({
             <TableHead>Joined</TableHead>
             <TableHead>Enrollments</TableHead>
             <TableHead>Courses taught</TableHead>
+            {canChangeRoles && <TableHead>Courses</TableHead>}
             {canChangeRoles && <TableHead className="text-right">Change role</TableHead>}
           </TableRow>
         </TableHeader>
@@ -123,6 +128,16 @@ export function UsersTable({
               <TableCell>{u._count.enrollments}</TableCell>
               <TableCell>{u._count.coursesTaught}</TableCell>
               {canChangeRoles && (
+                <TableCell>
+                  {u.role === Role.STUDENT && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCoursesFor(u)}>
+                      <BookOpen />
+                      Courses
+                    </Button>
+                  )}
+                </TableCell>
+              )}
+              {canChangeRoles && (
                 <TableCell className="text-right">
                   <select
                     value={u.role}
@@ -143,6 +158,11 @@ export function UsersTable({
           ))}
         </TableBody>
       </Table>
+
+      {/* Keyed by the member: opening it for someone else must not show the previous member's courses. */}
+      {coursesFor && (
+        <UserCoursesDialog key={coursesFor.id} user={coursesFor} onClose={() => setCoursesFor(null)} />
+      )}
     </div>
   );
 }

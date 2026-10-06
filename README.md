@@ -112,17 +112,26 @@ Every forgot-password handoff is recorded in the `EmailLog` collection (SENT = h
 
 The webhook must reach the app over the public internet, so test against a deployed URL (or a tunnel to `localhost:3010`).
 
-Paid courses can only be opened by a verified purchase: self-enrollment (the "Enroll" button, `POST /api/enrollments`) is refused for any course with a price unless the user manages it or is a buyer (holds at least one un-refunded GoHighLevel purchase).
+Paid courses can only be opened by a verified purchase or by an admin assigning them: self-enrollment (the "Enroll" button, `POST /api/enrollments`) is refused for any course with a price unless the user manages it, is a buyer (holds at least one un-refunded GoHighLevel purchase), or already has the course.
+
+#### Free members (GoHighLevel contacts without a purchase)
+
+A contact can also be stored on the platform without buying anything -- with exactly the email and username GoHighLevel holds for them:
+
+1. **Contact workflow** -- GoHighLevel workflows start from an event, not from a smart list, so trigger on whatever puts a contact in your list (*Contact Tag Added*, *Form Submitted*, *Contact Created*...). Action *Webhook*: `POST https://<your-domain>/api/webhooks/gohighlevel/contact`, with Custom Data:
+   - `secret` = `GHL_WEBHOOK_SECRET` (the same one as every other webhook)
+   - `email` = `{{contact.email}}`
+   - `username` = the contact field that holds the username (e.g. `{{contact.username}}` for a custom field, or `{{contact.name}}`). A valid username is stored as it is (lower case); anything else is tidied into one (`Jen Taylor` -> `jen.taylor`), and a number is added if another account already holds it. Left out, it falls back to the contact's name.
+2. The app stores the account (email, username, no password) and sends nothing back -- no email results. Until the member has a password, a later delivery updates the username; afterwards the account is left alone.
+3. **Password page** -- send the member to `https://<your-domain>/create-password` (a form's redirect, or a link in an email you write in GoHighLevel; `?email=<their email>` pre-fills it). They type their email, choose **only a password**, and land signed in on *Free Courses*. As on `/welcome` the link carries no proof of identity, so it only works for an account this webhook registered, that has no password yet, within 7 days of the registration; re-running the workflow for the contact opens a fresh 7 days.
+
+A free member can open every free course (`/free-courses`, also in the menu). Their course library lists the free courses plus any paid course an admin has assigned to them -- on `/admin/users`, the *Courses* button of a member opens a list of published courses with a switch each. Switching one on opens the course; switching it off closes it again (progress is kept). Buyers are unaffected: every published course stays open to them.
 
 ### 5. Vercel Blob (needed on Vercel for uploading videos and files)
 
 By default uploads are kept in a separate MongoDB database just for media (`parrot_media` on the same cluster as `DATABASE_URL`; override with `MEDIA_DATABASE_URL` / `MEDIA_DATABASE_NAME`). The browser sends each file in 3 MB parts, because a request body on Vercel is capped at 4.5 MB, and files are served back to signed-in users from `/api/media/file/...`. Files are limited to 100 MB this way. For larger course videos, connect Vercel Blob: in the Vercel dashboard, *Storage -> Create -> Blob*, create a **public** store and connect it to the project (this adds `BLOB_READ_WRITE_TOKEN`), then redeploy -- uploads then go straight from the browser to Blob.
 
 Files in a public store are reachable by anyone who has the exact URL. The URLs carry a random suffix and are only handed to users with access to the lesson, but a buyer could copy one and share it -- the usual trade-off of direct video delivery.
-
-## Free lessons page
-
-`/free-courses` is the free Communication Class: a public page with no platform menu, no sign-in and no email gate. A big player sits next to a clickable playlist of the class lessons, and one button at the end leads to the registration landing page (`REGISTRATION_URL` in `src/app/free-courses/free-class-markup.ts`). Like `/offer` and `/thank-you` it is a standalone HTML document (`src/app/free-courses`). The lessons -- title, description, badge and video URL -- are listed in `free-class-lessons.ts`; to change a lesson's video, replace its `src` there. The videos are files hosted outside the platform, so nothing from the course library is exposed by this page.
 
 ## Community and calendar
 

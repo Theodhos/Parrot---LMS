@@ -68,8 +68,27 @@ function toDetailDTO(course: CourseWithRelations, averageRating: number | null):
   };
 }
 
-export async function listCourses(query: ListCoursesQuery) {
-  const { courses, total } = await courseRepo.listCourses(query);
+/** Narrows a course list to what a member may be shown. */
+export interface CourseListScope {
+  /** Only courses that cost nothing (the Free Courses page). */
+  freeOnly?: boolean;
+  /**
+   * Free courses plus these ones: what the library shows a member who has
+   * not purchased. A paid course appears for them only once it is theirs,
+   * i.e. after an admin assigned it.
+   */
+  freeOrCourseIds?: string[];
+}
+
+export async function listCourses(query: ListCoursesQuery, scope: CourseListScope = {}) {
+  const { courses, total } = await courseRepo.listCourses(
+    query,
+    scope.freeOnly
+      ? { priceCents: 0 }
+      : scope.freeOrCourseIds
+        ? { OR: [{ priceCents: 0 }, { id: { in: scope.freeOrCourseIds } }] }
+        : undefined,
+  );
   const ratings = await courseRepo.averageRatingsForCourses(courses.map((c) => c.id));
 
   const items: CourseListItemDTO[] = courses.map((c) => toListItemDTO(c, ratings.get(c.id) ?? null));

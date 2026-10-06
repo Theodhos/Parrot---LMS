@@ -85,6 +85,45 @@ export function toCoursePurchase(payload: GhlPurchaseWebhookPayload): CoursePurc
   });
 }
 
+/**
+ * Body of the GoHighLevel workflow Webhook action fired when a contact joins
+ * as a free member. GoHighLevel sends the contact's standard fields at the
+ * top level; `username` (and the secret) come from the action's Custom Data.
+ */
+export const ghlContactWebhookSchema = z.object({
+  secret: optionalString,
+  email: optionalString,
+  username: optionalString,
+  name: optionalString,
+  full_name: optionalString,
+  first_name: optionalString,
+  last_name: optionalString,
+  customData: z
+    .object({ secret: optionalString, email: optionalString, username: optionalString, name: optionalString })
+    .optional(),
+});
+export type GhlContactWebhookPayload = z.infer<typeof ghlContactWebhookSchema>;
+
+export const memberSignupSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  name: z.string().trim().max(160).optional(),
+  /** As it stands on the GoHighLevel contact; made into a valid, unique login name when stored. */
+  username: z.string().trim().max(160).optional(),
+});
+export type MemberSignup = z.infer<typeof memberSignupSchema>;
+
+/** Flattens the raw GoHighLevel body into the signup the member service works with. */
+export function toMemberSignup(payload: GhlContactWebhookPayload): MemberSignup {
+  const custom = payload.customData ?? {};
+  const fullName = payload.full_name || [payload.first_name, payload.last_name].filter(Boolean).join(" ");
+
+  return memberSignupSchema.parse({
+    email: custom.email || payload.email,
+    name: custom.name || payload.name || fullName || undefined,
+    username: custom.username || payload.username || undefined,
+  });
+}
+
 export const courseRefundSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
   transactionId: z.string().min(1).optional(),

@@ -9,7 +9,7 @@ import { listMyEnrollments } from "@/features/enrollments/services/enrollment.se
 import { hasAllCourseAccess } from "@/features/access/services/all-access";
 import { listCoursesQuerySchema } from "@/features/courses/schemas/course.schema";
 import { cn } from "@/lib/utils";
-import { CourseStatus } from "@/generated/prisma";
+import { CourseStatus, Role } from "@/generated/prisma";
 
 interface CoursesPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -37,12 +37,19 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     pageSize: 5,
   });
 
-  const [{ items, total, page, pageCount }, categories, enrollments, unlocked] = await Promise.all([
-    listCourses(query),
+  const [categories, enrollments, unlocked] = await Promise.all([
     listCategories(),
     listMyEnrollments(user),
     hasAllCourseAccess(user.id),
   ]);
+
+  // A buyer (and staff) sees every course. A member who has not purchased
+  // sees the free ones, plus any paid course an admin has assigned to them.
+  const seesEverything = unlocked || user.role !== Role.STUDENT;
+  const { items, total, page, pageCount } = await listCourses(
+    query,
+    seesEverything ? {} : { freeOrCourseIds: enrollments.map((e) => e.courseId) },
+  );
 
   const enrollmentStatusByCourseId = new Map(enrollments.map((e) => [e.courseId, e.status]));
   const progressByCourseId = new Map(enrollments.map((e) => [e.courseId, e.progressPercent]));
@@ -58,7 +65,9 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           Browse all courses
         </h1>
         <p className="text-muted-foreground mt-1 max-w-xl text-sm">
-          {total} published course{total === 1 ? "" : "s"} — every course we offer, no exceptions.
+          {seesEverything
+            ? `${total} published course${total === 1 ? "" : "s"} — every course we offer, no exceptions.`
+            : `${total} course${total === 1 ? "" : "s"} open to you.`}
         </p>
       </div>
 

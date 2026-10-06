@@ -78,18 +78,18 @@ describe("claimAccountAfterCheckout (local MongoDB-backed)", () => {
 
   it("asks the caller to wait while no purchase is on record", async () => {
     expect(await claimAccountAfterCheckout(`nobody-${stamp}@test.local`, username, "Password123")).toEqual({
-      status: "awaiting-payment",
+      status: "not-on-record",
     });
     // The account exists but its payment has not been recorded yet.
     expect(await claimAccountAfterCheckout(email, username, "Password123")).toEqual({
-      status: "awaiting-payment",
+      status: "not-on-record",
     });
     await expect(verifyCredentials(email, "Password123")).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it("verifies an email against the purchases on record without changing anything", async () => {
-    expect(await getCheckoutEmailStatus(`nobody-${stamp}@test.local`)).toBe("awaiting-payment");
-    expect(await getCheckoutEmailStatus(email)).toBe("awaiting-payment");
+    expect(await getCheckoutEmailStatus(`nobody-${stamp}@test.local`)).toBe("not-on-record");
+    expect(await getCheckoutEmailStatus(email)).toBe("not-on-record");
 
     const payment = await recordPayment(userIds[1]!);
     expect(await getCheckoutEmailStatus(lateEmail)).toBe("ready");

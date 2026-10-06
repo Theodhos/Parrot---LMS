@@ -15,23 +15,73 @@ import {
 } from "lucide-react";
 import {
   checkCheckoutEmailAction,
+  checkInviteEmailAction,
   claimAccountAfterCheckoutAction,
+  claimInvitedAccountAction,
   type ClaimActionState,
 } from "@/features/auth/actions/activate.actions";
 
-// The checkout redirect can land here before the purchase webhook does. For
-// the first minute after the page opens, "no purchase on record" therefore
-// reads as "still on its way". After that it is reported at once, while the
-// page keeps re-checking quietly in case the webhook is unusually late.
-const PAYMENT_GRACE_MS = 60_000;
+// The redirect from GoHighLevel can land here before its webhook does. For
+// the first minute after the page opens, "nothing on record" therefore reads
+// as "still on its way". After that it is reported at once, while the page
+// keeps re-checking quietly in case the webhook is unusually late.
+const WEBHOOK_GRACE_MS = 60_000;
 const RECHECK_INTERVAL_MS = 3000;
 const LATE_RECHECK_INTERVAL_MS = 6000;
 const STOP_RECHECKING_AFTER_MS = 5 * 60_000;
 const TYPING_PAUSE_MS = 500;
 
 /**
- * How the typed email stands against the purchases on record: verified as
- * soon as it is typed, so a buyer knows before choosing a password.
+ * The two ways a login is set up without an emailed link. After a purchase
+ * (/welcome) the buyer chooses a username and a password; a free member
+ * GoHighLevel registered (/create-password) already has a username and
+ * chooses only the password. Everything else about the form is the same.
+ */
+const FLOWS = {
+  checkout: {
+    check: checkCheckoutEmailAction,
+    claim: claimAccountAfterCheckoutAction,
+    asksUsername: true,
+    copy: {
+      emailLabel: "Email used at checkout",
+      emailHint: "Must be the same email you entered at checkout — a different one cannot create a login.",
+      checking: "Checking this email against your purchase...",
+      waiting: "Looking for your purchase... right after checkout this can take a few seconds.",
+      ready: "Purchase found. Now choose your username and password.",
+      notFound: "No purchase found for this email. Enter the exact email you used at checkout.",
+      expired: "This page works for 24 hours after a purchase.",
+      submit: "Create login & start learning",
+      submitting: "Creating your login...",
+      confirming: "Confirming your payment...",
+      confirmingNote: "Your payment is still being confirmed. This usually takes a few seconds — please keep this page open.",
+    },
+  },
+  invite: {
+    check: checkInviteEmailAction,
+    claim: claimInvitedAccountAction,
+    asksUsername: false,
+    copy: {
+      emailLabel: "Your email",
+      emailHint: "Must be the same email you registered with — a different one cannot create a password.",
+      checking: "Checking this email against your registration...",
+      waiting: "Looking for your registration... right after signing up this can take a few seconds.",
+      ready: "Registration found. Now choose your password.",
+      notFound: "No registration found for this email. Enter the exact email you registered with.",
+      expired: "This page works for 7 days after you register.",
+      submit: "Create password & start learning",
+      submitting: "Creating your password...",
+      confirming: "Confirming your registration...",
+      confirmingNote:
+        "Your registration is still being confirmed. This usually takes a few seconds — please keep this page open.",
+    },
+  },
+} as const;
+
+export type SetupFlow = keyof typeof FLOWS;
+
+/**
+ * How the typed email stands against what is on record: verified as soon as
+ * it is typed, so the visitor knows before choosing a password.
  */
 type EmailCheck = "idle" | "checking" | "waiting" | "ready" | "not-found" | "already-set-up" | "expired";
 
@@ -47,10 +97,19 @@ const fieldHintClassName = "text-xs font-medium text-[#8a7b5c]";
 const emailStatusClassName = "flex items-start gap-1.5 text-xs font-medium";
 const inlineLinkClassName = "font-bold underline underline-offset-2";
 
-export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next: string }) {
+export interface WelcomeFormProps {
+  defaultEmail: string;
+  /** Where the post-checkout flow leads afterwards (see claimAccountAfterCheckoutAction); unused by the invite flow. */
+  next?: string;
+  flow?: SetupFlow;
+}
+
+export function WelcomeForm({ defaultEmail, next = "", flow = "checkout" }: WelcomeFormProps) {
+  const { check: checkEmail, claim, asksUsername, copy } = FLOWS[flow];
+
   const [state, setState] = useState<ClaimActionState>({ error: null });
   const [emailCheck, setEmailCheck] = useState<EmailCheck>(looksLikeEmail(defaultEmail) ? "checking" : "idle");
-  const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -70,9 +129,9 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
     const check = latestCheck.current;
 
     checkTimer.current = setTimeout(async () => {
-      let status: Awaited<ReturnType<typeof checkCheckoutEmailAction>>;
+      let status: Awaited<ReturnType<typeof checkEmail>>;
       try {
-        status = await checkCheckoutEmailAction(value);
+        status = await checkEmail(value);
       } catch {
         // Could not ask: say nothing here and let the submit give the answer.
         status = "invalid";
@@ -83,13 +142,13 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
         setEmailCheck("idle");
         return;
       }
-      if (status !== "awaiting-payment") {
+      if (status !== "not-on-record") {
         setEmailCheck(status);
         return;
       }
 
       const sinceOpened = Date.now() - openedAt.current;
-      const inGracePeriod = sinceOpened < PAYMENT_GRACE_MS;
+      const inGracePeriod = sinceOpened < WEBHOOK_GRACE_MS;
       setEmailCheck(inGracePeriod ? "waiting" : "not-found");
       if (sinceOpened < STOP_RECHECKING_AFTER_MS) {
         verifyEmail(value, inGracePeriod ? RECHECK_INTERVAL_MS : LATE_RECHECK_INTERVAL_MS);
@@ -101,7 +160,7 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
     openedAt.current = Date.now();
     if (looksLikeEmail(defaultEmail)) verifyEmail(defaultEmail, 0);
     return cancelEmailCheck;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the email the checkout passed along
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for the email the redirect passed along
   }, []);
 
   function handleEmailChange(event: ChangeEvent<HTMLInputElement>) {
@@ -129,13 +188,13 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
     startTransition(async () => {
       try {
         for (;;) {
-          // On success the action signs the buyer in and redirects to the dashboard.
-          const result = await claimAccountAfterCheckoutAction(formData);
-          if (!result.awaitingPayment) {
+          // On success the action signs the visitor in and redirects them on.
+          const result = await claim(formData);
+          if (!result.notOnRecord) {
             setState(result);
             return;
           }
-          if (Date.now() - openedAt.current >= PAYMENT_GRACE_MS) {
+          if (Date.now() - openedAt.current >= WEBHOOK_GRACE_MS) {
             // The email field carries the explanation.
             setState({ error: null });
             cancelEmailCheck();
@@ -143,11 +202,11 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
             emailInput.current?.focus();
             return;
           }
-          setConfirmingPayment(true);
+          setConfirming(true);
           await new Promise((resolve) => setTimeout(resolve, RECHECK_INTERVAL_MS));
         }
       } finally {
-        setConfirmingPayment(false);
+        setConfirming(false);
       }
     });
   }
@@ -170,7 +229,7 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
 
       <div className="flex flex-col gap-2">
         <label htmlFor="email" className={labelClassName}>
-          Email used at checkout
+          {copy.emailLabel}
         </label>
         <div className="group relative">
           <Mail className={fieldIconClassName} />
@@ -196,23 +255,23 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
           ) : emailCheck === "checking" ? (
             <p className={`${emailStatusClassName} text-[#8a7b5c]`}>
               <LoaderCircle className="mt-px size-3.5 shrink-0 animate-spin" />
-              Checking this email against your purchase...
+              {copy.checking}
             </p>
           ) : emailCheck === "waiting" ? (
             <p className={`${emailStatusClassName} text-[#8a7b5c]`}>
               <LoaderCircle className="mt-px size-3.5 shrink-0 animate-spin" />
-              Looking for your purchase... right after checkout this can take a few seconds.
+              {copy.waiting}
             </p>
           ) : emailCheck === "ready" ? (
             <p className={`${emailStatusClassName} text-[#4a6b22]`}>
               <CircleCheck className="mt-px size-3.5 shrink-0" />
-              Purchase found. Now choose your username and password.
+              {copy.ready}
             </p>
           ) : emailCheck === "not-found" ? (
             <p className={`${emailStatusClassName} text-[#c53030]`}>
               <CircleAlert className="mt-px size-3.5 shrink-0" />
               <span>
-                No purchase found for this email. Enter the exact email you used at checkout.{" "}
+                {copy.notFound}{" "}
                 <button type="button" onClick={checkEmailAgain} className={inlineLinkClassName}>
                   Check again
                 </button>
@@ -232,7 +291,7 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
             <p className={`${emailStatusClassName} text-[#c53030]`}>
               <CircleAlert className="mt-px size-3.5 shrink-0" />
               <span>
-                This page works for 24 hours after a purchase.{" "}
+                {copy.expired}{" "}
                 <Link href="/forgot-password" className={inlineLinkClassName}>
                   Use &ldquo;Forgot password&rdquo;
                 </Link>{" "}
@@ -240,35 +299,35 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
               </span>
             </p>
           ) : (
-            <p className={fieldHintClassName}>
-              Must be the same email you entered at checkout &mdash; a different one cannot create a login.
-            </p>
+            <p className={fieldHintClassName}>{copy.emailHint}</p>
           )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor="username" className={labelClassName}>
-          Username
-        </label>
-        <div className="group relative">
-          <UserRound className={fieldIconClassName} />
-          <input
-            id="username"
-            name="username"
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="Choose a username"
-            required
-            minLength={3}
-            maxLength={30}
-            className={`${fieldClassName} pr-4`}
-          />
+      {asksUsername && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="username" className={labelClassName}>
+            Username
+          </label>
+          <div className="group relative">
+            <UserRound className={fieldIconClassName} />
+            <input
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="Choose a username"
+              required
+              minLength={3}
+              maxLength={30}
+              className={`${fieldClassName} pr-4`}
+            />
+          </div>
+          {state.fieldErrors?.username && <p className={fieldErrorClassName}>{state.fieldErrors.username[0]}</p>}
         </div>
-        {state.fieldErrors?.username && <p className={fieldErrorClassName}>{state.fieldErrors.username[0]}</p>}
-      </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label htmlFor="password" className={labelClassName}>
@@ -314,20 +373,19 @@ export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next
         {pending ? (
           <>
             <LoaderCircle className="size-4 animate-spin" />
-            {confirmingPayment ? "Confirming your payment..." : "Creating your login..."}
+            {confirming ? copy.confirming : copy.submitting}
           </>
         ) : (
           <>
-            Create login &amp; start learning
+            {copy.submit}
             <ArrowRight className="size-4 transition-transform group-hover/submit:translate-x-0.5" />
           </>
         )}
       </button>
 
-      {confirmingPayment && (
+      {confirming && (
         <p role="status" className="text-center text-sm font-medium text-[#6D5D3B]">
-          Your payment is still being confirmed. This usually takes a few seconds &mdash; please keep this page
-          open.
+          {copy.confirmingNote}
         </p>
       )}
     </form>

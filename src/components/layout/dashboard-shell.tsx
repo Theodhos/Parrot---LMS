@@ -66,7 +66,7 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
           </Link>
 
           {variant === "student" && (
-            <nav className="hidden items-center gap-1 lg:ml-2 lg:flex xl:ml-8 xl:gap-6">
+            <nav className="hidden items-center lg:ml-1 lg:flex xl:ml-6 xl:gap-2 2xl:ml-8 2xl:gap-6">
               {navItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
@@ -74,7 +74,8 @@ export function DashboardShell({ variant, user, children }: DashboardShellProps)
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-2 text-sm font-bold transition-all px-4 py-2 rounded-full",
+                      // Six items: tight below xl so they stay on one line at 1024px.
+                      "flex items-center gap-1.5 whitespace-nowrap text-sm font-bold transition-all px-2.5 py-2 rounded-full xl:gap-2 xl:px-4",
                       active
                         ? "text-[#FF5757] border border-[#fcd5d5] bg-[#fff8f8]"
                         : "text-[#3E341F] hover:text-[#FF5757]",

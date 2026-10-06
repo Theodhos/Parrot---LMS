@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, BookOpen, FolderCog, GraduationCap, LayoutDashboard, Users, Home, Calendar, Bird } from "lucide-react";
+import { BarChart3, BookOpen, FolderCog, GraduationCap, LayoutDashboard, Users, Home, Calendar, Bird, Gift } from "lucide-react";
 
 export interface NavItem {
   label: string;
@@ -10,6 +10,7 @@ export interface NavItem {
 export const STUDENT_NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Lessons", href: "/courses", icon: BookOpen },
+  { label: "Free Courses", href: "/free-courses", icon: Gift },
   { label: "Community", href: "/community", icon: Users },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "My Bird", href: "/profile", icon: Bird },

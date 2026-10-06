@@ -34,8 +34,9 @@ export async function findCourseOwnerInfo(id: string) {
   return prisma.course.findUnique({ where: { id }, select: { id: true, instructorId: true, status: true } });
 }
 
-export async function listCourses(query: ListCoursesQuery) {
-  const where: Prisma.CourseWhereInput = {};
+/** `scope` narrows the list further, on top of the query's own filters. */
+export async function listCourses(query: ListCoursesQuery, scope?: Prisma.CourseWhereInput) {
+  const where: Prisma.CourseWhereInput = scope ? { AND: [scope] } : {};
 
   if (query.status) where.status = query.status;
   if (query.level) where.level = query.level;

@@ -120,6 +120,10 @@ By default uploads are kept in a separate MongoDB database just for media (`parr
 
 Files in a public store are reachable by anyone who has the exact URL. The URLs carry a random suffix and are only handed to users with access to the lesson, but a buyer could copy one and share it -- the usual trade-off of direct video delivery.
 
+## Free lessons page
+
+`/free-courses` is a public page with no platform menu and no sign-in: it shows up to three videos from the free courses and ends with one button to the registration landing page (`REGISTRATION_URL` in `src/app/free-courses/page.tsx`). To fill it, create a course with price `0` in the admin panel, publish it, and add published *Video* lessons -- the first video of each free course is shown, then further videos in order until there are three. Only a published video of a published free course is ever listed, and only such a video can be streamed without an account (`/free-courses/video/{lessonId}`); videos of paid or draft courses stay behind the sign-in.
+
 ## Community and calendar
 
 Both are stored in MongoDB (`src/features/community`, `src/features/calendar`).

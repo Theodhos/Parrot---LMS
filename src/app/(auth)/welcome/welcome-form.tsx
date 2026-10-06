@@ -47,7 +47,7 @@ const fieldHintClassName = "text-xs font-medium text-[#8a7b5c]";
 const emailStatusClassName = "flex items-start gap-1.5 text-xs font-medium";
 const inlineLinkClassName = "font-bold underline underline-offset-2";
 
-export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
+export function WelcomeForm({ defaultEmail, next }: { defaultEmail: string; next: string }) {
   const [state, setState] = useState<ClaimActionState>({ error: null });
   const [emailCheck, setEmailCheck] = useState<EmailCheck>(looksLikeEmail(defaultEmail) ? "checking" : "idle");
   const [confirmingPayment, setConfirmingPayment] = useState(false);
@@ -157,6 +157,7 @@ export function WelcomeForm({ defaultEmail }: { defaultEmail: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <input type="hidden" name="next" value={next} />
       {state.error && (
         <div
           role="alert"

@@ -73,11 +73,13 @@ export async function claimAccountAfterCheckoutAction(formData: FormData): Promi
 
   try {
     // A brand-new member sees the one-time offer page first; its "No thanks"
-    // leads on to the dashboard.
+    // leads on to the dashboard. A checkout that redirects to
+    // /welcome?next=course skips the offer and opens the course right away.
+    // Only these two destinations exist -- `next` is never used as a URL.
     await signIn("credentials", {
       email,
       password: formData.get("password"),
-      redirectTo: "/offer",
+      redirectTo: formData.get("next") === "course" ? "/dashboard" : "/offer",
     });
     return { error: null };
   } catch (error) {

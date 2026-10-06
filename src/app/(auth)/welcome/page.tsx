@@ -4,19 +4,21 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { WelcomeForm } from "./welcome-form";
 
 interface WelcomePageProps {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; next?: string }>;
 }
 
 /**
  * Where GoHighLevel sends a buyer straight after checkout: they choose their
  * username and password here, with no emailed link in between. An `email`
  * query parameter (when the checkout passes one) only pre-fills the field.
+ * `next=course` is set on the redirect of a checkout whose buyers should go
+ * straight into the course afterwards instead of seeing the offer page.
  */
 export default async function WelcomePage({ searchParams }: WelcomePageProps) {
   // A returning customer who is already signed in has nothing to set up.
   if (await getCurrentUser()) redirect("/dashboard");
 
-  const { email } = await searchParams;
+  const { email, next } = await searchParams;
 
   return (
     <div className="rounded-[2rem] border border-[#f3ecd7] bg-white p-7 shadow-[0_24px_60px_-28px_rgba(62,52,31,0.3)] sm:p-10">
@@ -30,7 +32,10 @@ export default async function WelcomePage({ searchParams }: WelcomePageProps) {
       </p>
 
       <div className="mt-8">
-        <WelcomeForm defaultEmail={typeof email === "string" ? email : ""} />
+        <WelcomeForm
+          defaultEmail={typeof email === "string" ? email : ""}
+          next={typeof next === "string" ? next : ""}
+        />
       </div>
 
       <p className="mt-6 text-center text-sm font-medium text-[#6D5D3B]">

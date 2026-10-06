@@ -45,7 +45,10 @@ export async function requestPasswordReset(identifier: string, siteUrl: string):
       locationId: payment?.ghlLocationId ?? undefined,
       email: user.email,
     },
-    tag: hasPassword ? GHL_TAGS.passwordReset : GHL_TAGS.credentialsReady,
+    // Always the password-reset workflow, also for a setup link: the
+    // credentials-ready one fires on every purchase and may be switched off
+    // now that buyers set up their login on /welcome straight after checkout.
+    tag: GHL_TAGS.passwordReset,
     buildLink: async () =>
       hasPassword
         ? `${siteUrl}/reset-password?token=${await createPasswordSetupToken(user.id, RESET_LINK_TTL_HOURS)}`

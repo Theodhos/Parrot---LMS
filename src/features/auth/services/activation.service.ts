@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/client";
+import { PaymentStatus } from "@/generated/prisma";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 
 const TOKEN_TTL_HOURS = 48;
@@ -80,6 +81,73 @@ export async function resetPasswordFromToken(token: string, password: string) {
   ]);
 
   return { email: user.email };
+}
+
+const CHECKOUT_CLAIM_WINDOW_HOURS = 24;
+
+export type CheckoutClaimResult = { status: "claimed"; email: string } | { status: "awaiting-payment" };
+
+/**
+ * The page GoHighLevel redirects a buyer to straight after checkout: they
+ * type the email they paid with and choose a username and password, with no
+ * emailed link in between. The browser redirect carries no proof of who
+ * paid, so the claim is only honoured for an account the purchase webhook
+ * created (a SUCCEEDED payment), that has no password yet, within 24 hours
+ * of that payment -- after that, forgot-password's emailed link is the way in.
+ *
+ * The redirect can beat the webhook: "awaiting-payment" means no purchase is
+ * on record for this email yet, and the caller should retry shortly.
+ */
+export async function claimAccountAfterCheckout(
+  email: string,
+  username: string,
+  password: string,
+): Promise<CheckoutClaimResult> {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return { status: "awaiting-payment" };
+  if (user.password) {
+    throw new ConflictError("This email already has a login -- sign in instead");
+  }
+
+  const payment = await prisma.payment.findFirst({
+    where: { userId: user.id, status: PaymentStatus.SUCCEEDED },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (!payment) return { status: "awaiting-payment" };
+  if (payment.createdAt.getTime() < Date.now() - CHECKOUT_CLAIM_WINDOW_HOURS * 60 * 60 * 1000) {
+    throw new ValidationError(
+      'This page works for 24 hours after a purchase. Use "Forgot password" on the sign-in page to finish setting up your account',
+    );
+  }
+
+  const usernameTaken = await prisma.user.findFirst({
+    where: { username, id: { not: user.id } },
+    select: { id: true },
+  });
+  if (usernameTaken) {
+    throw new ConflictError("That username is already taken -- please choose another");
+  }
+
+  // Conditional on the password still being unset, so two claims racing for
+  // the same account cannot both win.
+  const passwordHash = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
+  const { count } = await prisma.user.updateMany({
+    where: { id: user.id, OR: [{ password: null }, { password: { isSet: false } }] },
+    data: { username, password: passwordHash },
+  });
+  if (count === 0) {
+    throw new ConflictError("This email already has a login -- sign in instead");
+  }
+
+  // An emailed setup link still out there must not be able to replace the
+  // credentials just chosen.
+  await prisma.passwordSetupToken.updateMany({
+    where: { userId: user.id, ...UNUSED },
+    data: { usedAt: new Date() },
+  });
+
+  return { status: "claimed", email: user.email };
 }
 
 /** Sets the account's username and password from a valid, unused token and consumes it. */

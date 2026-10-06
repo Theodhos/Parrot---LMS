@@ -15,7 +15,7 @@ export interface UploadedMedia {
 export type UploadScope = "library" | "community";
 
 export interface UploadConfig {
-  driver: "blob" | "local";
+  driver: "blob" | "database";
   maxBytes: number;
   /** A tighter limit for images, where the scope has one. */
   maxImageBytes?: number;
@@ -55,8 +55,8 @@ const MULTIPART_THRESHOLD_BYTES = 20 * 1024 * 1024;
 /**
  * Uploads one file and returns its media record. On a deployment with Vercel
  * Blob the bytes go straight from the browser to Blob (so large videos
- * work); otherwise they go through the app onto local disk. Throws an Error
- * with a user-readable message on any failure.
+ * work); otherwise they are sent in parts into the media database. Throws an
+ * Error with a user-readable message on any failure.
  */
 export async function uploadMediaFile(
   file: File,
@@ -88,16 +88,67 @@ export async function uploadMediaFile(
       body: JSON.stringify({ url: blob.url, fileName: file.name, size: file.size, contentType: file.type, scope }),
     });
   } else {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("scope", scope);
-    res = await fetch("/api/media", { method: "POST", body: formData });
+    res = await uploadInParts(file, scope, onProgress);
   }
 
-  const json = (await res.json()) as ApiResponse<UploadedMedia>;
-  if (!json.success) throw new Error(json.error.message);
+  const media = await readApiResponse<UploadedMedia>(res);
   onProgress?.(100);
+  return media;
+}
+
+/** The API's { success, data | error } body; anything else (a proxy's error page) becomes a readable error. */
+async function readApiResponse<T>(res: Response): Promise<T> {
+  let json: ApiResponse<T>;
+  try {
+    json = (await res.json()) as ApiResponse<T>;
+  } catch {
+    throw new Error(`The upload failed (error ${res.status}). Please try again.`);
+  }
+  if (!json.success) throw new Error(json.error.message);
   return json.data;
+}
+
+const PART_ATTEMPTS = 3;
+
+/**
+ * Sends a file to the media database: reserve it, PUT it in fixed-size
+ * parts (a single request body is capped at a few MB on serverless hosts),
+ * then complete it. A part that fails is retried before giving up. Returns
+ * the completing response, whose body is the media record.
+ */
+async function uploadInParts(file: File, scope: UploadScope, onProgress?: (percentage: number) => void): Promise<Response> {
+  const begin = await fetch("/api/media/db-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileName: file.name, size: file.size, contentType: file.type, scope }),
+  });
+  const { uploadId, chunkSize, chunkCount } = await readApiResponse<{
+    uploadId: string;
+    chunkSize: number;
+    chunkCount: number;
+  }>(begin);
+
+  for (let index = 0; index < chunkCount; index++) {
+    const part = file.slice(index * chunkSize, (index + 1) * chunkSize);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const res = await fetch(`/api/media/db-upload/${uploadId}/${index}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: part,
+        });
+        await readApiResponse(res);
+        break;
+      } catch (error) {
+        if (attempt >= PART_ATTEMPTS) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+      }
+    }
+    // The last percent is kept for the completing request.
+    onProgress?.(Math.min(99, ((index + 1) / chunkCount) * 100));
+  }
+
+  return fetch(`/api/media/db-upload/${uploadId}`, { method: "POST" });
 }
 
 /** Length of a video file in whole seconds, read from its metadata in the browser; 0 if unreadable. */

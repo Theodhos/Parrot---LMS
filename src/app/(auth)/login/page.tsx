@@ -23,13 +23,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="mt-8">
           <LoginForm callbackUrl={callbackUrl || ""} />
         </div>
-
-        <p className="mt-8 text-center text-sm font-medium text-[#6D5D3B]">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-bold text-[#FF5757] underline-offset-4 hover:underline">
-            Create one
-          </Link>
-        </p>
       </div>
 
       <div className="flex items-start gap-3 rounded-3xl border border-[#f3ecd7] bg-[#FCF6ED] px-5 py-4">
@@ -37,8 +30,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <MailCheck className="size-4" />
         </span>
         <p className="text-sm font-medium text-[#6D5D3B]">
-          <span className="font-bold text-[#3E341F]">Just bought the course?</span> Open the link in your
-          purchase email to choose your username and password first.
+          <span className="font-bold text-[#3E341F]">Just bought the course?</span>{" "}
+          <Link href="/welcome" className="font-bold text-[#FF5757] underline-offset-4 hover:underline">
+            Create your username and password
+          </Link>{" "}
+          first.
         </p>
       </div>
     </div>

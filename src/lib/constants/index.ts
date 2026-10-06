@@ -24,8 +24,13 @@ export const ROUTES = {
   adminAnalytics: "/admin/analytics",
 } as const;
 
-/** Limit for uploads that pass through the app server (local-disk storage). */
-export const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+/**
+ * Limit for a file kept in the media database (the default storage). It is
+ * deliberately modest: a database is a fine home for photos, documents and
+ * short clips, not for hour-long course videos -- connect a Vercel Blob store
+ * (or paste a YouTube link) for those.
+ */
+export const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 
 /** Limit for uploads sent straight from the browser to Vercel Blob (course videos). */
 export const MAX_BLOB_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024 * 1024;

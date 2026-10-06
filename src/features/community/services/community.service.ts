@@ -10,6 +10,7 @@ import {
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import type { SessionUser } from "@/lib/permissions";
 import { removeUploadedMediaFor } from "@/features/media/services/media-cleanup";
+import { storedPathOf } from "@/features/media/services/storage";
 import {
   createCommentSchema,
   createPostSchema,
@@ -124,7 +125,7 @@ export async function createPost(author: SessionUser, input: CreatePostInput): P
       where: {
         userId: author.id,
         type: data.videoUrl ? "VIDEO" : "IMAGE",
-        OR: [{ fileUrl: url }, { fileUrl: pathnameOf(url) }],
+        OR: [{ fileUrl: url }, { fileUrl: storedPathOf(url) }],
       },
       select: { fileUrl: true },
     });
@@ -144,16 +145,6 @@ export async function createPost(author: SessionUser, input: CreatePostInput): P
     include: postInclude,
   });
   return toPostDTO(post, author);
-}
-
-/** "/uploads/x.mp4" for a local-disk upload given as an absolute URL; the input itself otherwise. */
-function pathnameOf(url: string): string {
-  try {
-    const { pathname } = new URL(url);
-    return pathname.startsWith("/uploads/") ? pathname : url;
-  } catch {
-    return url;
-  }
 }
 
 /** The author or any staff member may delete a post; its comments, reactions and uploaded photo or video go with it. */

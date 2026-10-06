@@ -1,68 +1,17 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { del } from "@vercel/blob";
-import { ValidationError } from "@/lib/errors/app-error";
-
-export interface StoredFile {
-  url: string;
-  size: number;
-}
-
-export interface MediaStorage {
-  save(fileName: string, buffer: Buffer): Promise<StoredFile>;
-  remove(url: string): Promise<void>;
-}
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+import { deleteStoredFile, STORED_FILE_PREFIX, storedFileIdOf } from "./media-db";
 
 /**
- * Local-disk storage adapter used for development and single-instance
- * deployments. Swap this out (S3, Vercel Blob, GCS, ...) by implementing
- * MediaStorage and changing the export below — nothing else in the media
- * feature needs to change.
- */
-class LocalDiskStorage implements MediaStorage {
-  async save(fileName: string, buffer: Buffer): Promise<StoredFile> {
-    await mkdir(UPLOAD_DIR, { recursive: true });
-    const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-    const storedName = `${randomUUID()}-${safeName}`;
-    await writeFile(path.join(UPLOAD_DIR, storedName), buffer);
-    return { url: `/uploads/${storedName}`, size: buffer.byteLength };
-  }
-
-  async remove(url: string): Promise<void> {
-    if (!url.startsWith("/uploads/")) return;
-    const filePath = path.join(process.cwd(), "public", url);
-    await unlink(filePath).catch(() => undefined);
-  }
-}
-
-export const mediaStorage: MediaStorage = new LocalDiskStorage();
-
-/**
- * Whether a Vercel Blob store is connected to this deployment. When it is,
- * the browser uploads straight to Blob (see /api/media/upload) -- the only
- * way to store files on Vercel, where the local disk is read-only and a
- * request body tops out at 4.5 MB. Without it (local development), uploads
- * fall back to the local-disk adapter above.
+ * Where uploads go. With a Vercel Blob store connected, the browser uploads
+ * straight to Blob (see /api/media/upload). Otherwise -- the default, on
+ * Vercel and in local development alike -- files are kept in the separate
+ * media database (see media-db.ts), which needs no extra service.
  */
 export function isBlobStorageConfigured(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-}
-
-/**
- * Throws a readable error when this deployment has nowhere to put a file:
- * on Vercel the disk is read-only, so without a connected Blob store every
- * upload would otherwise die with an unexplained 500.
- */
-export function assertStorageReady(): void {
-  if (process.env.VERCEL && !isBlobStorageConfigured()) {
-    throw new ValidationError(
-      "Uploads are not available yet: no file storage is connected to this site. An admin needs to connect a Vercel Blob store to the project and redeploy.",
-    );
-  }
 }
 
 /** Vercel Blob serves every store from a subdomain of this host. */
@@ -75,11 +24,35 @@ export function isBlobUrl(url: string): boolean {
   }
 }
 
-/** Deletes a stored file wherever it lives: a Blob URL from the Blob store, anything else from local disk. */
+/** Older uploads were written to this folder on the app server's own disk. */
+const LEGACY_DISK_PREFIX = "/uploads/";
+
+/**
+ * A stored file is recorded by its path ("/api/media/file/<id>/<name>"),
+ * while a lesson holds the same file's absolute URL. Returns the path for a
+ * URL that points at the platform's own storage, and the input otherwise.
+ */
+export function storedPathOf(url: string): string {
+  try {
+    const { pathname } = new URL(url);
+    return pathname.startsWith(STORED_FILE_PREFIX) || pathname.startsWith(LEGACY_DISK_PREFIX) ? pathname : url;
+  } catch {
+    return url;
+  }
+}
+
+/** Deletes a stored file wherever it lives: the Blob store, the media database, or (older uploads) local disk. */
 export async function removeStoredFile(url: string): Promise<void> {
   if (isBlobUrl(url)) {
     await del(url);
     return;
   }
-  await mediaStorage.remove(url);
+  const id = storedFileIdOf(url);
+  if (id) {
+    await deleteStoredFile(id);
+    return;
+  }
+  if (url.startsWith(LEGACY_DISK_PREFIX)) {
+    await unlink(path.join(process.cwd(), "public", url)).catch(() => undefined);
+  }
 }

@@ -4,8 +4,9 @@ import { ACCEPTED_DOCUMENT_TYPES, ACCEPTED_IMAGE_TYPES } from "@/lib/constants";
 import { NotFoundError, ValidationError } from "@/lib/errors/app-error";
 import { requireRole, requireSelfOrAdmin, type SessionUser } from "@/lib/permissions";
 import * as mediaRepo from "@/features/media/repositories/media.repository";
-import { assertStorageReady, isBlobStorageConfigured, isBlobUrl, mediaStorage, removeStoredFile } from "./storage";
-import { assertFileAllowed, assertMayUpload, uploadPolicy, type UploadScope } from "./upload-policy";
+import * as mediaDb from "./media-db";
+import { isBlobStorageConfigured, isBlobUrl, removeStoredFile } from "./storage";
+import { assertFileAllowed, assertMayUpload, parseUploadScope, uploadPolicy, type UploadScope } from "./upload-policy";
 
 function resolveMediaType(mimeType: string): MediaType {
   if (ACCEPTED_IMAGE_TYPES.includes(mimeType)) return MediaType.IMAGE;
@@ -14,22 +15,46 @@ function resolveMediaType(mimeType: string): MediaType {
   return MediaType.OTHER;
 }
 
-/** Stores a file that was posted through the app server (the local-disk path, used without Blob storage). */
-export async function uploadMedia(user: SessionUser, file: File, scope: UploadScope = "library") {
-  assertMayUpload(user, scope);
-  assertFileAllowed(file, uploadPolicy(scope, false));
-  assertStorageReady();
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const stored = await mediaStorage.save(file.name, buffer);
-
+function recordStoredFile(user: SessionUser, stored: mediaDb.StoredFileInfo) {
   return mediaRepo.createMedia({
-    fileName: file.name,
+    fileName: stored.fileName,
     fileUrl: stored.url,
-    type: resolveMediaType(file.type),
+    type: resolveMediaType(stored.contentType),
     size: stored.size,
     user: { connect: { id: user.id } },
   });
+}
+
+/** Stores a small file posted whole in one request into the media database. */
+export async function uploadMedia(user: SessionUser, file: File, scope: UploadScope = "library") {
+  assertMayUpload(user, scope);
+  assertFileAllowed(file, uploadPolicy(scope, false));
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const stored = await mediaDb.saveBuffer(user.id, { fileName: file.name, contentType: file.type, scope }, buffer);
+  return recordStoredFile(user, stored);
+}
+
+/**
+ * Reserves an upload into the media database (see media-db.ts): this is
+ * where the user's right to upload, and the file's type and size, are
+ * checked. The parts that follow can only fill exactly what was approved.
+ */
+export async function beginDatabaseUpload(
+  user: SessionUser,
+  file: { fileName: string; contentType: string; size: number },
+  scope: UploadScope = "library",
+) {
+  assertMayUpload(user, scope);
+  assertFileAllowed({ type: file.contentType, size: file.size }, uploadPolicy(scope, false));
+  return mediaDb.beginUpload(user.id, { ...file, scope });
+}
+
+/** Finishes an upload into the media database and records it as media. */
+export async function completeDatabaseUpload(user: SessionUser, uploadId: string) {
+  const stored = await mediaDb.completeUpload(user.id, uploadId);
+  assertMayUpload(user, parseUploadScope(stored.scope));
+  return recordStoredFile(user, stored);
 }
 
 /**

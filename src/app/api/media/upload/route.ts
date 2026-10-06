@@ -3,23 +3,20 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { apiSuccess, withApiHandler } from "@/lib/errors/handler";
 import { AppError } from "@/lib/errors/app-error";
 import { requireCurrentUser } from "@/lib/auth/session";
-import { assertStorageReady, isBlobStorageConfigured } from "@/features/media/services/storage";
+import { isBlobStorageConfigured } from "@/features/media/services/storage";
 import { assertMayUpload, parseUploadScope, uploadPolicy } from "@/features/media/services/upload-policy";
 
 /**
  * Tells the uploader where files go on this deployment and what this user
  * may upload in the requested scope (`?scope=library|community`): straight
- * to Vercel Blob from the browser, or through POST /api/media onto local
- * disk when no Blob store is connected (local development).
+ * to Vercel Blob from the browser when a Blob store is connected, or in
+ * parts through /api/media/db-upload into the media database otherwise.
  */
 export const GET = withApiHandler(async (req: NextRequest) => {
   const scope = parseUploadScope(req.nextUrl.searchParams.get("scope"));
   assertMayUpload(await requireCurrentUser(), scope);
-  // Fail here, before the member picks a file, rather than after they wait for an upload.
-  assertStorageReady();
-
   const blob = isBlobStorageConfigured();
-  return apiSuccess({ driver: blob ? ("blob" as const) : ("local" as const), ...uploadPolicy(scope, blob) });
+  return apiSuccess({ driver: blob ? ("blob" as const) : ("database" as const), ...uploadPolicy(scope, blob) });
 });
 
 /**

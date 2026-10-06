@@ -4,7 +4,7 @@ import { AuthError } from "next-auth";
 import { z, ZodError } from "zod";
 import { signIn } from "@/lib/auth/auth";
 import { registerSchema, usernameSchema } from "@/features/auth/schemas/auth.schema";
-import { activateAccountFromToken } from "@/features/auth/services/activation.service";
+import { activateAccountFromToken, claimAccountAfterCheckout } from "@/features/auth/services/activation.service";
 import { AppError } from "@/lib/errors/app-error";
 
 const activateSchema = z.object({
@@ -16,6 +16,59 @@ const activateSchema = z.object({
 export interface ActivateActionState {
   error: string | null;
   fieldErrors?: Record<string, string[] | undefined>;
+}
+
+const claimSchema = z.object({
+  email: registerSchema.shape.email,
+  username: usernameSchema,
+  password: registerSchema.shape.password,
+});
+
+export interface ClaimActionState extends ActivateActionState {
+  /** No purchase is on record for this email yet -- the webhook may still be on its way; retry shortly. */
+  awaitingPayment?: boolean;
+}
+
+/**
+ * The post-checkout page: sets the username and password of the account a
+ * just-completed purchase created, then signs the buyer straight in.
+ */
+export async function claimAccountAfterCheckoutAction(formData: FormData): Promise<ClaimActionState> {
+  let email: string;
+  try {
+    const parsed = claimSchema.parse({
+      email: formData.get("email"),
+      username: formData.get("username"),
+      password: formData.get("password"),
+    });
+    const result = await claimAccountAfterCheckout(parsed.email, parsed.username, parsed.password);
+    if (result.status === "awaiting-payment") {
+      return { error: null, awaitingPayment: true };
+    }
+    email = result.email;
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return { error: "Please fix the errors below.", fieldErrors: error.flatten().fieldErrors };
+    }
+    if (error instanceof AppError) {
+      return { error: error.message };
+    }
+    return { error: "Something went wrong. Please try again." };
+  }
+
+  try {
+    await signIn("credentials", {
+      email,
+      password: formData.get("password"),
+      redirectTo: "/dashboard",
+    });
+    return { error: null };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { error: "Account created -- please sign in." };
+    }
+    throw error;
+  }
 }
 
 /** Sets the account's username and password from a valid activation token, then signs the buyer straight in. */

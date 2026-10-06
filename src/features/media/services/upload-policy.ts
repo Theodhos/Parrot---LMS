@@ -33,7 +33,7 @@ export interface UploadPolicy {
 }
 
 export function uploadPolicy(scope: UploadScope, blobStorage: boolean): UploadPolicy {
-  // Without Blob storage the file passes through the app server, which caps it.
+  // Without Blob storage the file is kept in the media database, which has a lower ceiling.
   const storageLimit = blobStorage ? MAX_BLOB_UPLOAD_SIZE_BYTES : MAX_UPLOAD_SIZE_BYTES;
   if (scope === "community") {
     return {

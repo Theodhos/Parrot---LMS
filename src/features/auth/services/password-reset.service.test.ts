@@ -112,6 +112,7 @@ describe("password reset (local MongoDB-backed)", () => {
     await requestPasswordReset(email, siteUrl);
 
     expect(linkSentToGhl()).toMatch(/\/activate\?token=/);
-    expect(ghlCalls[1]!.body.tags).toEqual(["course-credentials-ready"]);
+    // Still the password-reset workflow: the purchase email one may be switched off.
+    expect(ghlCalls[1]!.body.tags).toEqual(["course-password-reset"]);
   });
 });

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { removeStoredFile } from "./storage";
+import { removeStoredFile, storedPathOf } from "./storage";
 
 /**
  * Deletes the uploaded files behind lesson videos that were just removed
@@ -17,16 +17,11 @@ export async function removeUploadedMediaFor(videoUrls: (string | null | undefin
   if (urls.length === 0) return;
 
   try {
-    // A local-disk upload is stored as "/uploads/x" while the lesson holds its absolute URL.
+    // A file in the platform's own storage is recorded by its path while the lesson holds its absolute URL.
     const candidates = new Set<string>();
     for (const url of urls) {
       candidates.add(url);
-      try {
-        const { pathname } = new URL(url);
-        if (pathname.startsWith("/uploads/")) candidates.add(pathname);
-      } catch {
-        // Not an absolute URL; the raw value is already a candidate.
-      }
+      candidates.add(storedPathOf(url));
     }
 
     const media = await prisma.media.findMany({ where: { fileUrl: { in: [...candidates] } } });

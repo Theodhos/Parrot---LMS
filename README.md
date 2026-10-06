@@ -122,7 +122,7 @@ Files in a public store are reachable by anyone who has the exact URL. The URLs 
 
 ## Free lessons page
 
-`/free-courses` is a public page with no platform menu and no sign-in: it shows up to three videos from the free courses and ends with one button to the registration landing page (`REGISTRATION_URL` in `src/app/free-courses/page.tsx`). To fill it, create a course with price `0` in the admin panel, publish it, and add published *Video* lessons -- the first video of each free course is shown, then further videos in order until there are three. Only a published video of a published free course is ever listed, and only such a video can be streamed without an account (`/free-courses/video/{lessonId}`); videos of paid or draft courses stay behind the sign-in.
+`/free-courses` is the free Communication Class: a public page with no platform menu, no sign-in and no email gate. A big player sits next to a clickable playlist of the class lessons, and one button at the end leads to the registration landing page (`REGISTRATION_URL` in `src/app/free-courses/free-class-markup.ts`). Like `/offer` and `/thank-you` it is a standalone HTML document (`src/app/free-courses`). The lessons -- title, description, badge and video URL -- are listed in `free-class-lessons.ts`; to change a lesson's video, replace its `src` there. The videos are files hosted outside the platform, so nothing from the course library is exposed by this page.
 
 ## Community and calendar
 

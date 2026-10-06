@@ -256,6 +256,10 @@ model User {
   image         String?
   bio           String?
   role          Role      @default(STUDENT)
+  // When the account first signed in through the login form. Unset until
+  // then -- being signed in automatically after choosing a password on
+  // /welcome does not count. A buyer's first such login lands on /thank-you.
+  firstLoginAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

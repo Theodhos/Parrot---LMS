@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { registerUser, verifyCredentials } from "./auth.service";
+import { recordFirstLogin, registerUser, verifyCredentials } from "./auth.service";
 import { ConflictError, UnauthorizedError } from "@/lib/errors/app-error";
 
 describe("auth.service (local MongoDB-backed)", () => {
@@ -37,6 +37,18 @@ describe("auth.service (local MongoDB-backed)", () => {
 
   it("rejects an incorrect password", async () => {
     await expect(verifyCredentials(email, "wrong-password")).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it("records the first login through the form once, and only for correct credentials", async () => {
+    expect(await recordFirstLogin(email, "wrong-password")).toBeNull();
+    expect(await recordFirstLogin("nobody-here@test.local", "whatever")).toBeNull();
+
+    expect(await recordFirstLogin(email, "Password123")).toMatchObject({ id: createdUserIds[0], role: "STUDENT" });
+    const record = await prisma.user.findUniqueOrThrow({ where: { id: createdUserIds[0] } });
+    expect(record.firstLoginAt).toBeInstanceOf(Date);
+
+    // Every later login is no longer the first.
+    expect(await recordFirstLogin(email, "Password123")).toBeNull();
   });
 
   it("rejects a non-existent email", async () => {

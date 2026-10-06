@@ -44,6 +44,26 @@ export async function findUserByLogin(identifier: string) {
 }
 
 /**
+ * Records an account's first sign-in through the login form, once its
+ * credentials check out, and returns the account when this was that first
+ * time (null on every later login, and for wrong credentials). Being signed
+ * in automatically after choosing a password on /welcome does not count.
+ */
+export async function recordFirstLogin(identifier: string, password: string) {
+  const user = await findUserByLogin(identifier);
+  if (!user?.password || user.firstLoginAt) return null;
+  if (!(await bcrypt.compare(password, user.password))) return null;
+
+  // Conditional on the field still being unset (MongoDB: never written, or
+  // null), so two logins racing each other cannot both be "the first".
+  const { count } = await prisma.user.updateMany({
+    where: { id: user.id, OR: [{ firstLoginAt: null }, { firstLoginAt: { isSet: false } }] },
+    data: { firstLoginAt: new Date() },
+  });
+  return count === 1 ? { id: user.id, role: user.role } : null;
+}
+
+/**
  * Verifies credentials against the local password hash. The plaintext
  * password never touches storage or logs -- only the bcrypt comparison
  * result does.

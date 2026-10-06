@@ -6,7 +6,8 @@ import { signIn } from "@/lib/auth/auth";
 import { Role } from "@/generated/prisma";
 import { loginSchema } from "@/features/auth/schemas/auth.schema";
 import { registerSchema } from "@/features/auth/schemas/auth.schema";
-import { findUserByLogin, registerUser } from "@/features/auth/services/auth.service";
+import { findUserByLogin, recordFirstLogin, registerUser } from "@/features/auth/services/auth.service";
+import { hasAllCourseAccess } from "@/features/access/services/all-access";
 import { AppError } from "@/lib/errors/app-error";
 
 export interface LoginActionState {
@@ -45,6 +46,13 @@ export async function loginAction(
       existingUser && (existingUser.role === Role.ADMIN || existingUser.role === Role.INSTRUCTOR)
         ? "/admin/dashboard"
         : "/dashboard";
+  }
+
+  // A buyer's very first sign-in through this form lands on the thank-you
+  // page instead, whose "Access Course" button leads on to the dashboard.
+  const firstTimer = await recordFirstLogin(parsed.data.email, parsed.data.password);
+  if (firstTimer?.role === Role.STUDENT && (await hasAllCourseAccess(firstTimer.id))) {
+    callbackUrl = "/thank-you";
   }
 
   try {

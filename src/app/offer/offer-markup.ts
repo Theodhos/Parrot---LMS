@@ -1,13 +1,19 @@
-/** GoHighLevel checkout for the 12-session package: every "YES" button leads here. */
-const OFFER_CHECKOUT_URL = "https://registration.parrotkindergarten.com/chechout-after-page-522121";
+/** GoHighLevel checkout for the 12-session package on /offer: every "YES" button leads here. */
+export const OFFER_CHECKOUT_URL = "https://registration.parrotkindergarten.com/chechout-after-page-522121";
 /** Where "No thanks" takes the member: into the platform. */
 const MEMBERS_AREA_URL = "/dashboard";
 
-const yesButton = (label: string, attributes = "") =>
-  `<a class="btn-primary" href="${OFFER_CHECKOUT_URL}"${attributes}>${label}</a>`;
+/**
+ * The <body> of the offer page, with every "YES" button leading to
+ * `checkoutUrl`. Styled by offer-styles.ts; no platform layout or menu
+ * around it. The same offer is served at more than one address, each with
+ * its own checkout (see offer-document.ts).
+ */
+export function renderOfferMarkup(checkoutUrl: string): string {
+  const yesButton = (label: string, attributes = "") =>
+    `<a class="btn-primary" href="${checkoutUrl}"${attributes}>${label}</a>`;
 
-/** The <body> of the offer page. Styled by offer-styles.ts; no platform layout or menu around it. */
-export const offerMarkup = `
+  return `
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="container">
@@ -392,3 +398,4 @@ export const offerMarkup = `
   </div>
 </footer>
 `;
+}

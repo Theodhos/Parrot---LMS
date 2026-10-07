@@ -1,8 +1,13 @@
-import { offerMarkup } from "./offer-markup";
+import { OFFER_CHECKOUT_URL, renderOfferMarkup } from "./offer-markup";
 import { offerStyles } from "./offer-styles";
 
-/** The complete HTML document served at /offer (see route.ts). */
-export const offerDocument = `<!DOCTYPE html>
+/**
+ * The complete HTML document of the private-sessions offer, with every
+ * "YES" button leading to `checkoutUrl`. Served at /offer (see route.ts)
+ * and, with its own checkout, at /login-upsell-thank-you.
+ */
+export function renderOfferDocument(checkoutUrl: string): string {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -17,7 +22,7 @@ export const offerDocument = `<!DOCTYPE html>
 <noscript><style>.fade-in{opacity:1;transform:none}</style></noscript>
 </head>
 <body>
-${offerMarkup}
+${renderOfferMarkup(checkoutUrl)}
 <script>
 // Fade-in on scroll
 (function(){
@@ -32,3 +37,7 @@ ${offerMarkup}
 </script>
 </body>
 </html>`;
+}
+
+/** The document served at /offer: the offer with its regular checkout. */
+export const offerDocument = renderOfferDocument(OFFER_CHECKOUT_URL);

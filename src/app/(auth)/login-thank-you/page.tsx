@@ -1,7 +1,7 @@
 import { LoginForm } from "../login/login-form";
 
-/** Where this sign-in leads: the sales-funnel page (see src/app/sales-funnel). */
-const SALES_FUNNEL_URL = "/sales-funnel";
+/** Where this sign-in leads: the funnel's offer page (see src/app/login-upsell-thank-you). */
+const SALES_FUNNEL_URL = "/login-upsell-thank-you";
 
 /**
  * A second sign-in page, used as a step of the sales funnel: it asks for the

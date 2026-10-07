@@ -7,13 +7,20 @@ export interface ThankYouButton {
 /** The button of /thank-you: into the platform. */
 export const ACCESS_COURSE_BUTTON: ThankYouButton = { label: "Access Course", href: "/dashboard" };
 
+export interface ThankYouOptions {
+  button: ThankYouButton;
+  /** Whether to show the "Check your inbox" note about the scheduling email. */
+  emailNote: boolean;
+}
+
 /**
- * The <body> of the thank-you page, with the given button. Styled by
- * thank-you-styles.ts; no platform layout or menu around it. The same page
- * is served at more than one address, each with its own button (see
- * thank-you-document.ts).
+ * The <body> of the thank-you page, with the given button and, optionally,
+ * the email note. Styled by thank-you-styles.ts; no platform layout or menu
+ * around it. The same page is served at more than one address, each with its
+ * own options (see thank-you-document.ts).
  */
-export function renderThankYouMarkup(button: ThankYouButton): string {
+export function renderThankYouMarkup(options: ThankYouOptions): string {
+  const { button } = options;
   return `
 <div id="ty-page">
 
@@ -41,7 +48,9 @@ export function renderThankYouMarkup(button: ThankYouButton): string {
       Your <strong>12 private one-on-one sessions</strong> with Justice Bellar, CPBT-KA, are confirmed. Twelve hours of professional behavior support — ready whenever your case needs them.
     </p>
 
-    <div class="ty-email">
+${
+  options.emailNote
+    ? `    <div class="ty-email">
       <div class="ty-email-ico">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2.5" stroke="#fff" stroke-width="1.8"/><path d="M4 7l8 6 8-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
@@ -50,7 +59,9 @@ export function renderThankYouMarkup(button: ThankYouButton): string {
         <p>In the next few minutes you'll get an email with a link to <strong>schedule your first session</strong> at a time that works for you. After that, you book the rest as the case unfolds — no expiration, no pressure.</p>
       </div>
     </div>
-
+`
+    : ""
+}
     <div class="ty-order">
       <div class="ty-order-item"><div class="ty-order-num">12</div><div class="ty-order-label">Sessions</div></div>
       <div class="ty-order-sep"></div>

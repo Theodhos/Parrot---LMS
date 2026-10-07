@@ -1,12 +1,12 @@
-import { ACCESS_COURSE_BUTTON, renderThankYouMarkup, type ThankYouButton } from "./thank-you-markup";
+import { ACCESS_COURSE_BUTTON, renderThankYouMarkup, type ThankYouOptions } from "./thank-you-markup";
 import { thankYouStyles } from "./thank-you-styles";
 
 /**
- * The complete HTML document of the thank-you page, with the given button.
- * Served at /thank-you (see route.ts) and, with its own button, at
- * /login-end-schema-thank-you.
+ * The complete HTML document of the thank-you page, with the given button
+ * and options. Served at /thank-you (see route.ts) and, with its own
+ * options, at /login-end-schema-thank-you.
  */
-export function renderThankYouDocument(button: ThankYouButton): string {
+export function renderThankYouDocument(options: ThankYouOptions): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,10 +21,10 @@ export function renderThankYouDocument(button: ThankYouButton): string {
 <style>${thankYouStyles}</style>
 </head>
 <body>
-${renderThankYouMarkup(button)}
+${renderThankYouMarkup(options)}
 </body>
 </html>`;
 }
 
-/** The document served at /thank-you: the page with its "Access Course" button. */
-export const thankYouDocument = renderThankYouDocument(ACCESS_COURSE_BUTTON);
+/** The document served at /thank-you: the page with its "Access Course" button and the email note. */
+export const thankYouDocument = renderThankYouDocument({ button: ACCESS_COURSE_BUTTON, emailNote: true });

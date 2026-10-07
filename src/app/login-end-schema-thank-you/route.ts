@@ -1,16 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { renderThankYouDocument } from "../thank-you/thank-you-document";
-
-/** The button on this page, as the funnel has it: on to the members area in GoHighLevel. */
-const MEMBERS_AREA_BUTTON = {
-  label: "Take Me To My Membership",
-  href: "https://registration.parrotkindergarten.com/members-area-end-page",
-};
+import { ACCESS_COURSE_BUTTON } from "../thank-you/thank-you-markup";
 
 /**
  * The thank-you page at the end of the funnel: the same document as
- * /thank-you (see src/app/thank-you) with the funnel's own button. A member
+ * /thank-you (see src/app/thank-you), with the "Access Course" button into
+ * the dashboard and without the note about a scheduling email. A member
  * whose browser is still signed in opens it directly; anyone else is sent
  * to /login-end-schema to sign in, which then leads straight back here.
  */
@@ -19,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/login-end-schema", req.nextUrl));
   }
 
-  return new Response(renderThankYouDocument(MEMBERS_AREA_BUTTON), {
+  return new Response(renderThankYouDocument({ button: ACCESS_COURSE_BUTTON, emailNote: false }), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "private, no-store",

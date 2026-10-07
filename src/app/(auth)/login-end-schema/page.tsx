@@ -2,17 +2,16 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { LoginForm } from "../login/login-form";
 
-/** Where this sign-in leads: the funnel's offer page (see src/app/login-upsell-thank-you). */
-const SALES_FUNNEL_URL = "/login-upsell-thank-you";
+/** Where this sign-in leads: the funnel's thank-you page (see src/app/login-end-schema-thank-you). */
+const THANK_YOU_URL = "/login-end-schema-thank-you";
 
 /**
- * A second sign-in page, used as a step of the sales funnel: it asks for the
- * login details only and, once they check out, goes straight on to the
- * funnel page instead of the dashboard. A browser that is already signed in
- * skips the form and goes there directly.
+ * The sign-in step before the funnel's thank-you page. A browser that is
+ * already signed in skips the form and goes straight to that page; anyone
+ * else signs in here and is taken there.
  */
-export default async function LoginThankYouPage() {
-  if (await getCurrentUser()) redirect(SALES_FUNNEL_URL);
+export default async function LoginEndSchemaPage() {
+  if (await getCurrentUser()) redirect(THANK_YOU_URL);
 
   return (
     <div className="rounded-[2rem] border border-[#f3ecd7] bg-white p-7 shadow-[0_24px_60px_-28px_rgba(62,52,31,0.3)] sm:p-10">
@@ -25,7 +24,7 @@ export default async function LoginThankYouPage() {
       </p>
 
       <div className="mt-8">
-        <LoginForm callbackUrl={SALES_FUNNEL_URL} />
+        <LoginForm callbackUrl={THANK_YOU_URL} />
       </div>
     </div>
   );

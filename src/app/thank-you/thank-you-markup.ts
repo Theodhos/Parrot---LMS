@@ -1,8 +1,20 @@
-/** Where "Access Course" takes the member: into the platform. */
-const COURSE_URL = "/dashboard";
+/** The one button on the thank-you page: what it says and where it leads. */
+export interface ThankYouButton {
+  label: string;
+  href: string;
+}
 
-/** The <body> of the thank-you page. Styled by thank-you-styles.ts; no platform layout or menu around it. */
-export const thankYouMarkup = `
+/** The button of /thank-you: into the platform. */
+export const ACCESS_COURSE_BUTTON: ThankYouButton = { label: "Access Course", href: "/dashboard" };
+
+/**
+ * The <body> of the thank-you page, with the given button. Styled by
+ * thank-you-styles.ts; no platform layout or menu around it. The same page
+ * is served at more than one address, each with its own button (see
+ * thank-you-document.ts).
+ */
+export function renderThankYouMarkup(button: ThankYouButton): string {
+  return `
 <div id="ty-page">
 
   <div class="ty-bg-deco" aria-hidden="true">
@@ -47,8 +59,8 @@ export const thankYouMarkup = `
       <div class="ty-order-item"><div class="ty-order-num">14-Day</div><div class="ty-order-label">Refund</div></div>
     </div>
 
-    <a class="ty-btn" href="${COURSE_URL}">
-      Access Course
+    <a class="ty-btn" href="${button.href}">
+      ${button.label}
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
 
@@ -61,3 +73,4 @@ export const thankYouMarkup = `
   </main>
 </div>
 `;
+}

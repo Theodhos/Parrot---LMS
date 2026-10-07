@@ -15,10 +15,10 @@ import {
 /** The next step of the sales funnel: the landing page that sells the other courses. */
 const NEXT_STEP_URL = "https://registration.parrotkindergarten.com/main-landing-page-2-page";
 
-// Shown 40 seconds after the page opens and, if closed, once more 40 seconds
+// Shown 20 seconds after the page opens and, if closed, once more 20 seconds
 // later -- twice in all for a visitor, remembered in their browser so it
 // does not come back on every visit.
-const DELAY_MS = 40_000;
+const DELAY_MS = 20_000;
 const MAX_SHOWINGS = 2;
 const STORAGE_KEY = "free-courses-next-step-shown";
 

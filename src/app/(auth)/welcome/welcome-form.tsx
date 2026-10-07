@@ -99,12 +99,14 @@ const inlineLinkClassName = "font-bold underline underline-offset-2";
 
 export interface WelcomeFormProps {
   defaultEmail: string;
-  /** Where the post-checkout flow leads afterwards (see claimAccountAfterCheckoutAction); unused by the invite flow. */
+  /** Where the flow leads afterwards (see the claim actions for the allowed values). */
   next?: string;
   flow?: SetupFlow;
+  /** The email came with the link and cannot be typed: only the password is asked for. */
+  lockedEmail?: boolean;
 }
 
-export function WelcomeForm({ defaultEmail, next = "", flow = "checkout" }: WelcomeFormProps) {
+export function WelcomeForm({ defaultEmail, next = "", flow = "checkout", lockedEmail = false }: WelcomeFormProps) {
   const { check: checkEmail, claim, asksUsername, copy } = FLOWS[flow];
 
   const [state, setState] = useState<ClaimActionState>({ error: null });
@@ -228,27 +230,34 @@ export function WelcomeForm({ defaultEmail, next = "", flow = "checkout" }: Welc
       )}
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="email" className={labelClassName}>
-          {copy.emailLabel}
-        </label>
-        <div className="group relative">
-          <Mail className={fieldIconClassName} />
-          <input
-            ref={emailInput}
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="you@example.com"
-            defaultValue={defaultEmail}
-            onChange={handleEmailChange}
-            required
-            aria-describedby="email-status"
-            className={`${fieldClassName} pr-4`}
-          />
-        </div>
+        {lockedEmail ? (
+          // The email came with the link and is not typed here; only its verification shows.
+          <input ref={emailInput} type="hidden" name="email" value={defaultEmail} />
+        ) : (
+          <>
+            <label htmlFor="email" className={labelClassName}>
+              {copy.emailLabel}
+            </label>
+            <div className="group relative">
+              <Mail className={fieldIconClassName} />
+              <input
+                ref={emailInput}
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="you@example.com"
+                defaultValue={defaultEmail}
+                onChange={handleEmailChange}
+                required
+                aria-describedby="email-status"
+                className={`${fieldClassName} pr-4`}
+              />
+            </div>
+          </>
+        )}
         <div id="email-status" aria-live="polite">
           {state.fieldErrors?.email ? (
             <p className={fieldErrorClassName}>{state.fieldErrors.email[0]}</p>

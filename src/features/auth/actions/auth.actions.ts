@@ -48,11 +48,16 @@ export async function loginAction(
         : "/dashboard";
   }
 
-  // A buyer's very first sign-in through this form lands on the thank-you
-  // page instead, whose "Access Course" button leads on to the dashboard.
-  const firstTimer = await recordFirstLogin(parsed.data.email, parsed.data.password);
-  if (firstTimer?.role === Role.STUDENT && (await hasAllCourseAccess(firstTimer.id))) {
-    callbackUrl = "/thank-you";
+  // A buyer's very first sign-in through the plain login form lands on the
+  // thank-you page instead, whose "Access Course" button leads on to the
+  // dashboard. A sign-in that was asked to go somewhere specific (a
+  // protected route, the sales funnel's /login-thank-you) goes there, and
+  // still counts as the first login later.
+  if (!explicitCallbackUrl) {
+    const firstTimer = await recordFirstLogin(parsed.data.email, parsed.data.password);
+    if (firstTimer?.role === Role.STUDENT && (await hasAllCourseAccess(firstTimer.id))) {
+      callbackUrl = "/thank-you";
+    }
   }
 
   try {

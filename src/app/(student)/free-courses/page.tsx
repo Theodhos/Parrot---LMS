@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Gift } from "lucide-react";
 import { CourseCard } from "@/components/courses/course-card";
+import { MoreCoursesPopup } from "@/components/courses/more-courses-popup";
 import { requireCurrentUser } from "@/lib/auth/session";
 import { listCourses } from "@/features/courses/services/course.service";
 import { listMyEnrollments } from "@/features/enrollments/services/enrollment.service";
@@ -27,6 +28,7 @@ export default async function FreeCoursesPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <MoreCoursesPopup />
       <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-100 via-lime-50 to-emerald-50 p-6 ring-1 ring-emerald-200/60 sm:p-8 dark:from-emerald-500/10 dark:via-transparent dark:to-transparent dark:ring-emerald-500/20">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-300">
           <Gift className="size-3.5" />

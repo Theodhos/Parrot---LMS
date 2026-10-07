@@ -132,10 +132,13 @@ export async function claimInvitedAccountAction(formData: FormData): Promise<Cla
   }
 
   try {
+    // /create-password opens the free courses; /set-password (next=upsell)
+    // goes on to the funnel's offer page. Only these two destinations
+    // exist -- `next` is never used as a URL.
     await signIn("credentials", {
       email,
       password: formData.get("password"),
-      redirectTo: "/free-courses",
+      redirectTo: formData.get("next") === "upsell" ? "/login-upsell-thank-you" : "/free-courses",
     });
     return { error: null };
   } catch (error) {
